@@ -50,6 +50,20 @@ class Hero extends Model
         return ($resistencia * $factor_base) + ($sellos * $bonus_por_sello);
     }
 
+    public function recalcularHP(): void
+    {
+        $bonusResistencia = 0;
+        foreach ($this->equippedItems as $slot) {
+            if ($slot->piece_type === 'pecho') {
+                $bonusResistencia += $slot->equipment->stat_bonus + floor(($slot->carga ?? 0) / 5);
+            }
+        }
+        $resistenciaEfectiva = $this->resistencia + $bonusResistencia;
+        $nuevoHP = self::calcularHP($resistenciaEfectiva);
+        $hpActual = min($this->hp_actual, $nuevoHP);
+        $this->update(['hp_maximo' => $nuevoHP, 'hp_actual' => $hpActual]);
+    }
+
     // ─── Stats de combate (stat base + bonus de equipo) ───────────────────────
 
     /**

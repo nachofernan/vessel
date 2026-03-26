@@ -183,6 +183,8 @@ class GameCore extends Component
 
         $invRow->delete();
         $this->hero = $this->loadHero($this->heroId);
+        $this->hero->recalcularHP();
+        $this->hero = $this->loadHero($this->heroId);
     }
 
     public function unequipItem(string $pieceType): void
@@ -192,6 +194,8 @@ class GameCore extends Component
 
         $this->addToInventory($this->heroId, $slot->equipment_id, $slot->carga);
         $slot->delete();
+        $this->hero = $this->loadHero($this->heroId);
+        $this->hero->recalcularHP();
         $this->hero = $this->loadHero($this->heroId);
     }
 
