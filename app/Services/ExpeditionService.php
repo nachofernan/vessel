@@ -191,6 +191,10 @@ class ExpeditionService
             $cargaDespues = min($piece->carga_maxima, $equipado->carga + $cargaDrop);
             $equipado->update(['carga' => $cargaDespues]);
             $fusion = true;
+            if ($piece->piece_type === 'pecho') {
+                $hero = \App\Models\Hero::find($heroId);
+                $hero->recalcularHP();
+            }
         } else {
             // ¿Está en inventario?
             $existing = Inventory::where('hero_id', $heroId)->where('equipment_id', $piece->id)->first();

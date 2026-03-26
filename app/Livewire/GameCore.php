@@ -91,6 +91,9 @@ class GameCore extends Component
                     'carga'        => rand(5, 15),
                 ]);
             }
+            if ($slot === 'pecho') {
+                $hero->recalcularHP();
+            }
         }
     }
 
