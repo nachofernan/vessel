@@ -241,6 +241,23 @@ class GameCore extends Component
         $this->marketMessage = null;
     }
 
+    public function buyMerchantItem(int $equipmentId, int $carga): void
+    {
+        $this->hero   = $this->loadHero($this->heroId);
+        $result       = app(\App\Services\MarketService::class)->buy($this->hero, $equipmentId, $carga);
+        $this->marketMessage = $result['message'];
+
+        if ($result['ok']) {
+            // Elimina el ítem comprado del resultado para que no se pueda comprar dos veces
+            $items = collect($this->resultado['items'] ?? [])
+                ->reject(fn($item) => $item['equipment_id'] === $equipmentId)
+                ->values()
+                ->all();
+            $this->resultado = array_merge($this->resultado, ['items' => $items]);
+            $this->hero = $this->loadHero($this->heroId);
+        }
+    }
+
     // ─── Tick ────────────────────────────────────────────────────────────────
 
     public function tick(): void

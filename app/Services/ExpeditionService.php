@@ -53,6 +53,7 @@ class ExpeditionService
             'rest'    => $this->resolveRest($expedition),
             'chest'   => $this->resolveChest($expedition),
             'silence' => $this->resolveSilence($expedition),
+            'merchant' => $this->resolveMerchant($expedition),
             default   => $this->resolveCombat($expedition),
         };
     }
@@ -61,8 +62,9 @@ class ExpeditionService
     {
         $roll = mt_rand(1, 100);
         return match(true) {
-            $roll <= 30 => 'combat',
-            $roll <= 70 => 'silence',
+            $roll <= 25 => 'combat',
+            $roll <= 50 => 'silence',
+            $roll <= 75 => 'merchant',
             default     => 'chest',
         };
     }
@@ -305,6 +307,48 @@ class ExpeditionService
             'carga_obtenida' => $esenciaGanada,
             'oro_obtenido'   => $oro,
             'completed_at'   => now(),
+        ]);
+
+        return $expedition->fresh();
+    }
+
+    private function resolveMerchant(Expedition $expedition): Expedition
+    {
+        $count  = rand(2, 3);
+        $pieces = \App\Models\Equipment::with('element')
+            ->where('level', 1)
+            ->inRandomOrder()
+            ->limit($count)
+            ->get();
+
+        $items = $pieces->map(function (\App\Models\Equipment $eq) {
+            $carga = rand(5, 15);
+            return [
+                'equipment_id'             => $eq->id,
+                'name'                     => $eq->name,
+                'piece_type'               => $eq->piece_type,
+                'element_slug'             => $eq->element->slug,
+                'element_name'             => $eq->element->name,
+                'element_color'            => $eq->element->color,
+                'carga'                    => $carga,
+                'carga_maxima'             => $eq->carga_maxima,
+                'precio'                   => \App\Services\MarketService::PRECIO_NIVEL_1,
+                'stat_bonus_efectivo'      => $eq->stat_bonus + (int)floor($carga / 5),
+                'alignment_bonus_efectivo' => $eq->alignment_bonus + (int)floor($carga / 5),
+            ];
+        })->values()->all();
+
+        $expedition->update([
+            'status'       => 'finished',
+            'event_type'   => 'merchant',
+            'resultado'    => [
+                'event'       => 'merchant',
+                'items'       => $items,
+                'oro_ganado'  => 0,
+                'message'     => 'Un mercader ambulante detiene al Buscador. Extiende su mercancía en silencio.',
+            ],
+            'oro_obtenido' => 0,
+            'completed_at' => now(),
         ]);
 
         return $expedition->fresh();

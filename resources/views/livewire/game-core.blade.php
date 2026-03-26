@@ -358,6 +358,71 @@
             <p class="text-blue-500 font-bold mb-3">{{ $resultado['message'] }}</p>
             <p class="mb-4">HP: {{ $hero->hp_actual }} / {{ $hero->hp_maximo }}</p>
 
+        @elseif(($resultado['event'] ?? null) === 'merchant')
+            @php
+                $colores   = \App\Models\Talisman::COLORES;
+                $statLabel = [
+                    'casco'=>'INT','pecho'=>'RES','brazos'=>'FUE',
+                    'piernas'=>'DES','escudo'=>'DEF','arma'=>'ATQ','amuleto'=>'SUE',
+                ];
+            @endphp
+
+            <p class="text-yellow-600 font-bold mb-2">{{ $resultado['message'] }}</p>
+
+            @if($marketMessage)
+                <div class="mb-3 px-3 py-2 text-xs border
+                    {{ str_contains($marketMessage, 'insuficiente') || str_contains($marketMessage, 'no encontrado')
+                    ? 'border-red-300 bg-red-50 text-red-600'
+                    : 'border-green-300 bg-green-50 text-green-700' }}">
+                    {{ $marketMessage }}
+                </div>
+            @endif
+
+            <p class="text-xs text-gray-400 mb-3">Oro disponible: <strong>{{ $hero->oro }}</strong></p>
+
+            @if(empty($resultado['items']))
+                <p class="text-xs text-gray-400 italic mb-4">El mercader ya no tiene nada para ofrecer.</p>
+            @else
+                <div class="space-y-2 mb-4">
+                    @foreach($resultado['items'] as $item)
+                        @php
+                            $c      = $item['element_color'];
+                            $canBuy = $hero->oro >= $item['precio'];
+                        @endphp
+                        <div class="flex items-center border border-gray-200 px-3 py-2
+                                    {{ $canBuy ? 'hover:bg-gray-50' : 'opacity-50' }}">
+                            <div class="w-14 text-gray-400 text-xs uppercase shrink-0">
+                                {{ $item['piece_type'] }}
+                            </div>
+                            <div class="flex-1 mx-2 leading-tight">
+                                <span class="font-semibold text-sm">{{ $item['name'] }}</span>
+                                <span class="ml-1 text-xs px-1 rounded"
+                                    style="background:{{ $c }}22;color:{{ $c }};border:1px solid {{ $c }}55">
+                                    {{ $item['element_name'] }}
+                                </span>
+                                <br>
+                                <span class="text-xs text-gray-400">
+                                    {{ $statLabel[$item['piece_type']] }}+{{ $item['stat_bonus_efectivo'] }}
+                                    &nbsp;·&nbsp; Alin+{{ $item['alignment_bonus_efectivo'] }}
+                                    &nbsp;·&nbsp; Carga: {{ $item['carga'] }}/{{ $item['carga_maxima'] }}
+                                </span>
+                            </div>
+                            <div class="shrink-0 text-right">
+                                <div class="text-xs text-gray-500 mb-1">{{ $item['precio'] }} oro</div>
+                                @if($canBuy)
+                                    <button wire:click="buyMerchantItem({{ $item['equipment_id'] }}, {{ $item['carga'] }})"
+                                            class="text-xs bg-black text-white px-2 py-1 hover:bg-gray-700">
+                                        Comprar
+                                    </button>
+                                @else
+                                    <span class="text-xs text-gray-300">Sin oro</span>
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
+
         @elseif(($resultado['event'] ?? null) === 'silence')
             @php $kingdom = $resultado['kingdom'] ?? $selectedKingdom; @endphp
             <p class="font-bold mb-3" style="color:{{ $colores[$kingdom] ?? '#9ca3af' }}">
