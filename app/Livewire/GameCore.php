@@ -8,6 +8,7 @@ use App\Models\HeroEquipment;
 use App\Models\Inventory;
 use App\Models\Talisman;
 use App\Services\ExpeditionService;
+use App\Services\MarketService;
 use Livewire\Component;
 
 class GameCore extends Component
@@ -23,6 +24,9 @@ class GameCore extends Component
     public int    $selectedDuration = 10;
     public string $selectedKingdom  = 'fire';
     public int    $secondsLeft      = 0;
+
+    public array  $marketStock   = [];
+    public ?string $marketMessage = null;
 
     public const KINGDOMS = [
         'fire'   => ['name' => 'Fuego',  'color' => '#ef4444'],
@@ -200,6 +204,33 @@ class GameCore extends Component
         $this->hero = $this->loadHero($this->heroId);
         $this->hero->recalcularHP();
         $this->hero = $this->loadHero($this->heroId);
+    }
+
+    // ─── Mercado ─────────────────────────────────────────────────────────────
+
+    public function goToMarket(): void
+    {
+        $this->hero        = $this->loadHero($this->heroId);
+        $this->marketStock = app(MarketService::class)->getStock();
+        $this->marketMessage = null;
+        $this->phase       = 'market';
+    }
+
+    public function buyItem(int $equipmentId, int $carga): void
+    {
+        $this->hero   = $this->loadHero($this->heroId);
+        $result       = app(MarketService::class)->buy($this->hero, $equipmentId, $carga);
+        $this->marketMessage = $result['message'];
+
+        if ($result['ok']) {
+            $this->hero = $this->loadHero($this->heroId);
+        }
+    }
+
+    public function refreshMarket(): void
+    {
+        $this->marketStock   = app(MarketService::class)->getStock();
+        $this->marketMessage = null;
     }
 
     // ─── Tick ────────────────────────────────────────────────────────────────

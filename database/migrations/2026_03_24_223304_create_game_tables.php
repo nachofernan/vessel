@@ -123,6 +123,13 @@ return new class extends Migration
             $table->unsignedInteger('carga')->default(0);
             $table->timestamps();
         });
+
+        Schema::create('market_stocks', function (Blueprint $table) {
+            $table->id();
+            $table->json('items');           // array de { equipment_id, carga, precio }
+            $table->timestamp('generated_at');
+            $table->timestamps();
+        });
     }
 
     /**
@@ -140,6 +147,7 @@ return new class extends Migration
         Schema::dropIfExists('inventories');
         Schema::dropIfExists('hero_equipment');
         Schema::dropIfExists('equipments');
+        Schema::dropIfExists('market_stocks');
         Schema::enableForeignKeyConstraints();
     }
 };
