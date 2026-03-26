@@ -211,7 +211,11 @@ class GameCore extends Component
     public function goToMarket(): void
     {
         $this->hero        = $this->loadHero($this->heroId);
-        $this->marketStock = app(MarketService::class)->getStock();
+        $purchased = session('market_purchased', []);
+        $this->marketStock = collect(app(MarketService::class)->getStock())
+            ->reject(fn($item) => in_array($item['equipment_id'], $purchased))
+            ->values()
+            ->all();
         $this->marketMessage = null;
         $this->phase       = 'market';
     }
@@ -229,7 +233,11 @@ class GameCore extends Component
 
     public function refreshMarket(): void
     {
-        $this->marketStock   = app(MarketService::class)->getStock();
+        $purchased = session('market_purchased', []);
+        $this->marketStock = collect(app(MarketService::class)->getStock())
+            ->reject(fn($item) => in_array($item['equipment_id'], $purchased))
+            ->values()
+            ->all();
         $this->marketMessage = null;
     }
 

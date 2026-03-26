@@ -23,6 +23,7 @@ class MarketService
         $stock = MarketStock::latest()->first();
 
         if (!$stock || !$stock->isFresh()) {
+            session()->forget('market_purchased'); 
             $stock = $this->generate();
         }
 
@@ -44,8 +45,11 @@ class MarketService
             return ['ok' => false, 'message' => 'Ítem no encontrado.'];
         }
 
-        // Descontar oro
+        // Descontar oro y marcar como comprado
         $hero->decrement('oro', self::PRECIO_NIVEL_1);
+        $purchased = session('market_purchased', []);
+        $purchased[] = $equipmentId;
+        session(['market_purchased' => $purchased]);
 
         // Fusión: equipado > inventario > nuevo
         $equipped = HeroEquipment::where('hero_id', $hero->id)
