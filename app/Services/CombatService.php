@@ -10,10 +10,6 @@ class CombatService
     /**
      * Construye el array del enemigo.
      * El poder escala linealmente dentro del anillo según la duración de la expedición.
-     *
-     * Anillo 1: poder_base = 100 → ×(duracion/10)
-     * Anillo 2: poder_base = 1000
-     * Anillo 3: poder_base = 10000
      */
     public function buildEnemy(string $elementSlug, int $ring = 1, int $durationSeconds = 10): array
     {
@@ -25,11 +21,9 @@ class CombatService
 
         $poder = $poderBase * ($durationSeconds / 10);
 
-        // Stats de combate derivados del poder (para Fase 2)
-        // El enemigo tiene un ataque y HP proporcional a su poder
-        $ataque  = (int)($poder / rand(10, 12)); // /5
-        $hp      = rand(25, (int)($poder / 2)); // (int)($poder / 2); // *2
-        $defensa = (int)($poder / rand(10, 12)); // /8
+        $ataque  = (int)($poder / rand(10, 12));
+        $hp      = rand(25, (int)($poder / 2));
+        $defensa = (int)($poder / rand(10, 12));
 
         return [
             'name'    => $this->enemyName($elementSlug),
@@ -46,7 +40,7 @@ class CombatService
         $hero->loadMissing('equippedItems.equipment.element');
 
         $talisman = $hero->talisman;
-        $talisman->setRelation('hero', $hero); // evita re-query
+        $talisman->setRelation('hero', $hero);
 
         $heroHp    = $hero->hp_actual;
         $enemyHp   = $enemy['hp'];
@@ -54,14 +48,12 @@ class CombatService
         $round     = 0;
         $maxRounds = 20;
 
-        $elementoArma   = $hero->elementoArma();
-        $elementoEscudo = $hero->elementoEscudo();
+        $elementoArma    = $hero->elementoArma();
+        $elementoEscudo  = $hero->elementoEscudo();
         $elementoEnemigo = $enemy['element'];
 
-        // Probabilidades de Fase 1 (fijas por combate, no por ronda)
-        $chanceHeroeGolpea  = $talisman->chanceDeGolpe($enemy['poder'], $elementoEnemigo);
-        // El enemigo calcula su poder vs el héroe — usamos el elemento del escudo como referencia de "defensa elemental del héroe"
-        $poderEnemigoVsHeroe = $enemy['poder']; // el enemigo tiene su propio poder
+        $chanceHeroeGolpea   = $talisman->chanceDeGolpe($enemy['poder'], $elementoEnemigo);
+        $poderEnemigoVsHeroe = $enemy['poder'];
         $miPoderVsEnemigo    = $talisman->poderContra($elementoEnemigo);
         $chanceEnemigoGolpea = $poderEnemigoVsHeroe / ($poderEnemigoVsHeroe + $miPoderVsEnemigo);
 
@@ -71,16 +63,16 @@ class CombatService
         while ($heroHp > 0 && $enemyHp > 0 && $round < $maxRounds) {
             $round++;
 
-            // ── Fase 1: chequeo de golpe (Talismán) ───────────────────────────
-            $heroeGolpea  = (mt_rand(0, 1000) / 1000) < $chanceHeroeGolpea;
+            // ── Fase 1: chequeo de golpe (Talismán) ──────────────────────────
+            $heroeGolpea   = (mt_rand(0, 1000) / 1000) < $chanceHeroeGolpea;
             $enemigoGolpea = (mt_rand(0, 1000) / 1000) < $chanceEnemigoGolpea;
 
-            // ── Modificadores de Destreza y Suerte ────────────────────────────
+            // ── Modificadores de Destreza y Suerte ───────────────────────────
             $dodged    = $enemigoGolpea && ((mt_rand(0, 100) / 100) < $this->dodgeChance($hero->destreza));
             $doubleHit = $heroeGolpea   && ((mt_rand(0, 100) / 100) < $this->dodgeChance($hero->destreza * 0.5));
             $critical  = $heroeGolpea   && ((mt_rand(0, 100) / 100) < ($hero->suerte / 200));
 
-            // ── Varianza ±15% ─────────────────────────────────────────────────
+            // ── Varianza ±15% ────────────────────────────────────────────────
             $variance = 0.85 + (mt_rand(0, 30) / 100);
 
             // ── Fase 2: daño (equipo elemental) ──────────────────────────────
@@ -119,7 +111,10 @@ class CombatService
             ];
         }
 
-        $heroWon = $enemyHp <= 0 && $heroHp > 0;
+        // Empate (ambos a 0 en la misma ronda, o límite de rondas con ambos en pie):
+        // se considera victoria del héroe. Si llegó al límite de rondas con el enemigo
+        // aún vivo pero el héroe también vivo, también es victoria por supervivencia.
+        $heroWon = $enemyHp <= 0 || ($heroHp > 0 && $round >= $maxRounds);
 
         return [
             'hero_won'              => $heroWon,

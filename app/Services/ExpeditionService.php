@@ -50,11 +50,11 @@ class ExpeditionService
     public function resolve(Expedition $expedition): Expedition
     {
         return match($expedition->event_type) {
-            'rest'    => $this->resolveRest($expedition),
-            'chest'   => $this->resolveChest($expedition),
-            'silence' => $this->resolveSilence($expedition),
+            'rest'     => $this->resolveRest($expedition),
+            'chest'    => $this->resolveChest($expedition),
+            'silence'  => $this->resolveSilence($expedition),
             'merchant' => $this->resolveMerchant($expedition),
-            default   => $this->resolveCombat($expedition),
+            default    => $this->resolveCombat($expedition),
         };
     }
 
@@ -95,14 +95,12 @@ class ExpeditionService
     {
         $hero    = Hero::with(['equippedItems.equipment.element', 'talisman'])->find($expedition->hero_id);
         $kingdom = $expedition->kingdom_slug;
-        $ring    = 1; // por ahora siempre anillo 1
+        $ring    = 1;
 
-        // El poder del enemigo escala con la duración elegida por el jugador
         $enemy  = $this->combat->buildEnemy($kingdom, $ring, $expedition->duration_seconds);
         $result = $this->combat->resolve($hero, $enemy);
 
         $heroDied = !$result['hero_won'];
-        //$oro      = $heroDied ? mt_rand(2, 8) : mt_rand(10, 30);
         $oro      = $heroDied ? 0 : mt_rand(0.5 * $expedition->duration_seconds, 3 * $expedition->duration_seconds);
 
         $talisman       = $hero->talisman;
@@ -113,7 +111,6 @@ class ExpeditionService
             $esenciaPerdida = $talisman->getEsencia($kingdom);
             $talisman->resetEsencia($kingdom);
         } else {
-            //$esenciaGanada = $talisman->addEsencia($kingdom, mt_rand(15, 25));
             $esenciaGanada = $talisman->addEsencia($kingdom, mt_rand(0.2 * $expedition->duration_seconds, 0.5 * $expedition->duration_seconds));
         }
 
@@ -139,18 +136,18 @@ class ExpeditionService
             'status'         => 'finished',
             'event_type'     => 'combat',
             'resultado'      => array_merge($result, [
-                'kingdom'         => $kingdom,
-                'esencia_ganada'  => $esenciaGanada,
-                'esencia_perdida' => $esenciaPerdida,
-                'oro_ganado'      => $oro,
-                'loot_item_id'    => $lootItem['id'] ?? null,
-                'loot_item_name'  => $lootItem['name'] ?? null,
-                'loot_item_slug'  => $lootItem['element_slug'] ?? null,
-                'loot_carga_drop' => $lootItem['carga_drop'] ?? null,
-                'loot_carga_antes'=> $lootItem['carga_antes'] ?? null,
-                'loot_carga_despues'=> $lootItem['carga_despues'] ?? null,
-                'loot_carga_maxima' => $lootItem['carga_maxima'] ?? null,
-                'loot_fusion'     => $lootItem['fusion'] ?? false,
+                'kingdom'             => $kingdom,
+                'esencia_ganada'      => $esenciaGanada,
+                'esencia_perdida'     => $esenciaPerdida,
+                'oro_ganado'          => $oro,
+                'loot_item_id'        => $lootItem['id'] ?? null,
+                'loot_item_name'      => $lootItem['name'] ?? null,
+                'loot_item_slug'      => $lootItem['element_slug'] ?? null,
+                'loot_carga_drop'     => $lootItem['carga_drop'] ?? null,
+                'loot_carga_antes'    => $lootItem['carga_antes'] ?? null,
+                'loot_carga_despues'  => $lootItem['carga_despues'] ?? null,
+                'loot_carga_maxima'   => $lootItem['carga_maxima'] ?? null,
+                'loot_fusion'         => $lootItem['fusion'] ?? false,
             ]),
             'carga_obtenida' => $esenciaGanada,
             'oro_obtenido'   => $oro,
@@ -181,11 +178,10 @@ class ExpeditionService
             default                => rand(5, 10),
         };
 
-        $fusion  = false;
-        $cargaAntes = 0;
+        $fusion       = false;
+        $cargaAntes   = 0;
         $cargaDespues = 0;
 
-        // ¿Ya está equipado?
         $equipado = \App\Models\HeroEquipment::where('hero_id', $heroId)
             ->where('equipment_id', $piece->id)
             ->first();
@@ -196,11 +192,10 @@ class ExpeditionService
             $equipado->update(['carga' => $cargaDespues]);
             $fusion = true;
             if ($piece->piece_type === 'pecho') {
-                $hero = \App\Models\Hero::find($heroId);
+                $hero = \App\Models\Hero::with('equippedItems.equipment.element')->find($heroId);
                 $hero->recalcularHP();
             }
         } else {
-            // ¿Está en inventario?
             $existing = Inventory::where('hero_id', $heroId)->where('equipment_id', $piece->id)->first();
             if ($existing) {
                 $cargaAntes   = $existing->carga;
@@ -214,14 +209,14 @@ class ExpeditionService
         }
 
         return [
-            'id'           => $piece->id,
-            'name'         => $piece->name,
-            'element_slug' => $piece->element->slug ?? $kingdomSlug,
-            'carga_drop'   => $cargaDrop,
-            'carga_antes'  => $cargaAntes,
-            'carga_despues'=> $cargaDespues,
-            'carga_maxima' => $piece->carga_maxima,
-            'fusion'       => $fusion,
+            'id'            => $piece->id,
+            'name'          => $piece->name,
+            'element_slug'  => $piece->element->slug ?? $kingdomSlug,
+            'carga_drop'    => $cargaDrop,
+            'carga_antes'   => $cargaAntes,
+            'carga_despues' => $cargaDespues,
+            'carga_maxima'  => $piece->carga_maxima,
+            'fusion'        => $fusion,
         ];
     }
 
@@ -230,9 +225,7 @@ class ExpeditionService
         $hero    = $expedition->hero;
         $kingdom = $expedition->kingdom_slug;
 
-        //$oro           = mt_rand(2, 6);
         $oro           = mt_rand(0.2 * $expedition->duration_seconds, 0.5 * $expedition->duration_seconds);
-        //$esenciaGanada = $hero->talisman->addEsencia($kingdom, mt_rand(3, 8));
         $esenciaGanada = $hero->talisman->addEsencia($kingdom, mt_rand(0.1 * $expedition->duration_seconds, 0.3 * $expedition->duration_seconds));
 
         $hero->update(['oro' => $hero->oro + $oro]);
@@ -262,31 +255,26 @@ class ExpeditionService
         $esenciaGanada = 0;
         $lootItem      = null;
 
-        // Tres tiros independientes al 50%
-        $tocaOro      = mt_rand(1, 100) <= 50;
-        $tocaEsencia  = mt_rand(1, 100) <= 50;
-        $tocaLoot     = mt_rand(1, 100) <= 50;
+        $tocaOro     = mt_rand(1, 100) <= 50;
+        $tocaEsencia = mt_rand(1, 100) <= 50;
+        $tocaLoot    = mt_rand(1, 100) <= 50;
 
-        // Si ninguno tocó, forzar uno al azar
         if (!$tocaOro && !$tocaEsencia && !$tocaLoot) {
-            $forzado = mt_rand(1, 3);
+            $forzado     = mt_rand(1, 3);
             $tocaOro     = $forzado === 1;
             $tocaEsencia = $forzado === 2;
             $tocaLoot    = $forzado === 3;
         }
 
         if ($tocaOro) {
-            //$oro = mt_rand(15, 50);
             $oro = mt_rand(1.5 * $expedition->duration_seconds, 4 * $expedition->duration_seconds);
             $hero->update(['oro' => $hero->oro + $oro]);
         }
 
         if ($tocaEsencia) {
-            //$esenciaGanada = $hero->talisman->addEsencia($kingdom, mt_rand(10, 30));
             $esenciaGanada = $hero->talisman->addEsencia($kingdom, mt_rand(0.5 * $expedition->duration_seconds, 1.5 * $expedition->duration_seconds));
         }
 
-        
         if ($tocaLoot) {
             $lootItem = $this->rollLoot($hero->id, $kingdom, $expedition->duration_seconds);
         }
@@ -294,21 +282,21 @@ class ExpeditionService
         $expedition->update([
             'status'         => 'finished',
             'resultado'      => [
-                'event'          => 'chest',
-                'kingdom'        => $kingdom,
-                'oro_ganado'     => $oro,
-                'esencia_ganada' => $esenciaGanada,
-                'loot_item_id'    => $lootItem['id'] ?? null,
-                'loot_item_name'  => $lootItem['name'] ?? null,
-                'loot_item_slug'  => $lootItem['element_slug'] ?? null,
-                'loot_carga_drop' => $lootItem['carga_drop'] ?? null,
-                'loot_carga_antes'=> $lootItem['carga_antes'] ?? null,
-                'loot_carga_despues'=> $lootItem['carga_despues'] ?? null,
-                'loot_carga_maxima' => $lootItem['carga_maxima'] ?? null,
-                'loot_fusion'     => $lootItem['fusion'] ?? false,
-                'toco_oro'       => $tocaOro,
-                'toco_esencia'   => $tocaEsencia,
-                'toco_loot'      => $tocaLoot,
+                'event'               => 'chest',
+                'kingdom'             => $kingdom,
+                'oro_ganado'          => $oro,
+                'esencia_ganada'      => $esenciaGanada,
+                'loot_item_id'        => $lootItem['id'] ?? null,
+                'loot_item_name'      => $lootItem['name'] ?? null,
+                'loot_item_slug'      => $lootItem['element_slug'] ?? null,
+                'loot_carga_drop'     => $lootItem['carga_drop'] ?? null,
+                'loot_carga_antes'    => $lootItem['carga_antes'] ?? null,
+                'loot_carga_despues'  => $lootItem['carga_despues'] ?? null,
+                'loot_carga_maxima'   => $lootItem['carga_maxima'] ?? null,
+                'loot_fusion'         => $lootItem['fusion'] ?? false,
+                'toco_oro'            => $tocaOro,
+                'toco_esencia'        => $tocaEsencia,
+                'toco_loot'           => $tocaLoot,
             ],
             'carga_obtenida' => $esenciaGanada,
             'oro_obtenido'   => $oro,
@@ -320,17 +308,19 @@ class ExpeditionService
 
     private function resolveMerchant(Expedition $expedition): Expedition
     {
-        $count  = rand(2, 3);
+        $count   = rand(2, 3);
         $kingdom = $expedition->kingdom_slug;
-        $pieces = \App\Models\Equipment::with('element')
+
+        // FIX: buscar por element_id (la tabla equipments no tiene kingdom_slug)
+        $element = Element::where('slug', $kingdom)->first();
+        $pieces  = \App\Models\Equipment::with('element')
             ->where('level', 1)
-            ->where('kingdom_slug', $kingdom)
+            ->where('element_id', $element?->id)
             ->inRandomOrder()
             ->limit($count)
             ->get();
 
         $items = $pieces->map(function (\App\Models\Equipment $eq) use ($expedition) {
-            //$carga = rand(5, 15);
             $carga = match(true) {
                 $expedition->duration_seconds >= 50 => rand(50, 80),
                 $expedition->duration_seconds >= 40 => rand(35, 50),
@@ -357,10 +347,10 @@ class ExpeditionService
             'status'       => 'finished',
             'event_type'   => 'merchant',
             'resultado'    => [
-                'event'       => 'merchant',
-                'items'       => $items,
-                'oro_ganado'  => 0,
-                'message'     => 'Un mercader ambulante detiene al Buscador. Extiende su mercancía en silencio.',
+                'event'      => 'merchant',
+                'items'      => $items,
+                'oro_ganado' => 0,
+                'message'    => 'Un mercader ambulante detiene al Buscador. Extiende su mercancía en silencio.',
             ],
             'oro_obtenido' => 0,
             'completed_at' => now(),

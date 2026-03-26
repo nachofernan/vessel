@@ -25,7 +25,7 @@ class GameCore extends Component
     public string $selectedKingdom  = 'fire';
     public int    $secondsLeft      = 0;
 
-    public array  $marketStock   = [];
+    public array  $marketStock    = [];
     public ?string $marketMessage = null;
 
     public const KINGDOMS = [
@@ -167,12 +167,17 @@ class GameCore extends Component
                                     ->first();
 
         if ($currentSlot) {
-            // Si es el mismo item → fusión: sumar carga al equipado
             if ($currentSlot->equipment_id === $newPiece->id) {
+                // Fusión: mismo item → sumar carga al slot equipado
                 $maxCarga   = $newPiece->carga_maxima;
                 $nuevaCarga = min($maxCarga, $currentSlot->carga + $invRow->carga);
                 $currentSlot->update(['carga' => $nuevaCarga]);
                 $invRow->delete();
+                // FIX: recalcular HP si el pecho cambia de carga por fusión
+                if ($pieceType === 'pecho') {
+                    $this->hero = $this->loadHero($this->heroId);
+                    $this->hero->recalcularHP();
+                }
                 $this->hero = $this->loadHero($this->heroId);
                 return;
             }
@@ -210,14 +215,10 @@ class GameCore extends Component
 
     public function goToMarket(): void
     {
-        $this->hero        = $this->loadHero($this->heroId);
-        $purchased = session('market_purchased', []);
-        $this->marketStock = collect(app(MarketService::class)->getStock())
-            ->reject(fn($item) => in_array($item['equipment_id'], $purchased))
-            ->values()
-            ->all();
+        $this->hero          = $this->loadHero($this->heroId);
         $this->marketMessage = null;
-        $this->phase       = 'market';
+        $this->marketStock   = $this->buildMarketStock();
+        $this->phase         = 'market';
     }
 
     public function buyItem(int $equipmentId, int $carga): void
@@ -227,28 +228,25 @@ class GameCore extends Component
         $this->marketMessage = $result['message'];
 
         if ($result['ok']) {
-            $this->hero = $this->loadHero($this->heroId);
+            $this->hero        = $this->loadHero($this->heroId);
+            // FIX: refrescar stock inmediatamente para que el ítem comprado desaparezca
+            $this->marketStock = $this->buildMarketStock();
         }
     }
 
     public function refreshMarket(): void
     {
-        $purchased = session('market_purchased', []);
-        $this->marketStock = collect(app(MarketService::class)->getStock())
-            ->reject(fn($item) => in_array($item['equipment_id'], $purchased))
-            ->values()
-            ->all();
         $this->marketMessage = null;
+        $this->marketStock   = $this->buildMarketStock();
     }
 
     public function buyMerchantItem(int $equipmentId, int $carga): void
     {
         $this->hero   = $this->loadHero($this->heroId);
-        $result       = app(\App\Services\MarketService::class)->buy($this->hero, $equipmentId, $carga);
+        $result       = app(MarketService::class)->buy($this->hero, $equipmentId, $carga);
         $this->marketMessage = $result['message'];
 
         if ($result['ok']) {
-            // Elimina el ítem comprado del resultado para que no se pueda comprar dos veces
             $items = collect($this->resultado['items'] ?? [])
                 ->reject(fn($item) => $item['equipment_id'] === $equipmentId)
                 ->values()
@@ -290,6 +288,18 @@ class GameCore extends Component
         } else {
             Inventory::create(['hero_id' => $heroId, 'equipment_id' => $equipmentId, 'carga' => $carga]);
         }
+    }
+
+    /**
+     * Construye el stock del mercado filtrando los ítems ya comprados en esta sesión.
+     */
+    private function buildMarketStock(): array
+    {
+        $purchased = session('market_purchased', []);
+        return collect(app(MarketService::class)->getStock())
+            ->reject(fn($item) => in_array($item['equipment_id'], $purchased))
+            ->values()
+            ->all();
     }
 
     private function loadHero(int $heroId): Hero
