@@ -15,7 +15,7 @@ class ExpeditionService
     public function launch(Hero $hero, int $durationSeconds, string $kingdomSlug = 'fire'): Expedition
     {
         $element   = Element::where('slug', $kingdomSlug)->firstOrFail();
-        $eventType = $this->sortearEvento();
+        $eventType = $this->sortearEvento($durationSeconds);
 
         return Expedition::create([
             'hero_id'          => $hero->id,
@@ -58,14 +58,14 @@ class ExpeditionService
         };
     }
 
-    private function sortearEvento(): string
+    private function sortearEvento(int $durationSeconds): string
     {
         $roll = mt_rand(1, 100);
         return match(true) {
-            $roll <= 25 => 'combat',
-            $roll <= 50 => 'silence',
-            $roll <= 75 => 'merchant',
-            default     => 'chest',
+            $roll <= 10 => 'merchant',
+            $roll <= 25 => 'chest',
+            $roll <= 50 + $durationSeconds => 'combat',
+            default     => 'silence',
         };
     }
 
@@ -102,7 +102,8 @@ class ExpeditionService
         $result = $this->combat->resolve($hero, $enemy);
 
         $heroDied = !$result['hero_won'];
-        $oro      = $heroDied ? mt_rand(2, 8) : mt_rand(10, 30);
+        //$oro      = $heroDied ? mt_rand(2, 8) : mt_rand(10, 30);
+        $oro      = $heroDied ? 0 : mt_rand(0.5 * $expedition->duration_seconds, 3 * $expedition->duration_seconds);
 
         $talisman       = $hero->talisman;
         $esenciaGanada  = 0;
@@ -112,7 +113,8 @@ class ExpeditionService
             $esenciaPerdida = $talisman->getEsencia($kingdom);
             $talisman->resetEsencia($kingdom);
         } else {
-            $esenciaGanada = $talisman->addEsencia($kingdom, mt_rand(15, 25));
+            //$esenciaGanada = $talisman->addEsencia($kingdom, mt_rand(15, 25));
+            $esenciaGanada = $talisman->addEsencia($kingdom, mt_rand(0.2 * $expedition->duration_seconds, 0.5 * $expedition->duration_seconds));
         }
 
         $lootItem = null;
@@ -172,11 +174,11 @@ class ExpeditionService
         if (!$piece) return null;
 
         $cargaDrop = match(true) {
-            $durationSeconds >= 50 => 80,
-            $durationSeconds >= 40 => 40,
-            $durationSeconds >= 30 => 20,
-            $durationSeconds >= 20 => 10,
-            default                => 5,
+            $durationSeconds >= 50 => rand(50, 80),
+            $durationSeconds >= 40 => rand(35, 50),
+            $durationSeconds >= 30 => rand(20, 35),
+            $durationSeconds >= 20 => rand(10, 20),
+            default                => rand(5, 10),
         };
 
         $fusion  = false;
@@ -228,8 +230,10 @@ class ExpeditionService
         $hero    = $expedition->hero;
         $kingdom = $expedition->kingdom_slug;
 
-        $oro           = mt_rand(2, 6);
-        $esenciaGanada = $hero->talisman->addEsencia($kingdom, mt_rand(3, 8));
+        //$oro           = mt_rand(2, 6);
+        $oro           = mt_rand(0.2 * $expedition->duration_seconds, 0.5 * $expedition->duration_seconds);
+        //$esenciaGanada = $hero->talisman->addEsencia($kingdom, mt_rand(3, 8));
+        $esenciaGanada = $hero->talisman->addEsencia($kingdom, mt_rand(0.1 * $expedition->duration_seconds, 0.3 * $expedition->duration_seconds));
 
         $hero->update(['oro' => $hero->oro + $oro]);
 
@@ -272,12 +276,14 @@ class ExpeditionService
         }
 
         if ($tocaOro) {
-            $oro = mt_rand(15, 50);
+            //$oro = mt_rand(15, 50);
+            $oro = mt_rand(1.5 * $expedition->duration_seconds, 4 * $expedition->duration_seconds);
             $hero->update(['oro' => $hero->oro + $oro]);
         }
 
         if ($tocaEsencia) {
-            $esenciaGanada = $hero->talisman->addEsencia($kingdom, mt_rand(10, 30));
+            //$esenciaGanada = $hero->talisman->addEsencia($kingdom, mt_rand(10, 30));
+            $esenciaGanada = $hero->talisman->addEsencia($kingdom, mt_rand(0.5 * $expedition->duration_seconds, 1.5 * $expedition->duration_seconds));
         }
 
         
@@ -321,8 +327,15 @@ class ExpeditionService
             ->limit($count)
             ->get();
 
-        $items = $pieces->map(function (\App\Models\Equipment $eq) {
-            $carga = rand(5, 15);
+        $items = $pieces->map(function (\App\Models\Equipment $eq) use ($expedition) {
+            //$carga = rand(5, 15);
+            $carga = match(true) {
+                $expedition->duration_seconds >= 50 => rand(50, 80),
+                $expedition->duration_seconds >= 40 => rand(35, 50),
+                $expedition->duration_seconds >= 30 => rand(20, 35),
+                $expedition->duration_seconds >= 20 => rand(10, 20),
+                default                             => rand(5, 10),
+            };
             return [
                 'equipment_id'             => $eq->id,
                 'name'                     => $eq->name,
