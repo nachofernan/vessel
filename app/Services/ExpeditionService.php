@@ -61,8 +61,8 @@ class ExpeditionService
     {
         $roll = mt_rand(1, 100);
         return match(true) {
-            $roll <= 1 => 'combat',
-            $roll <= 2 => 'silence',
+            $roll <= 30 => 'combat',
+            $roll <= 70 => 'silence',
             default     => 'chest',
         };
     }
