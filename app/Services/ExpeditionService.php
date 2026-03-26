@@ -321,8 +321,10 @@ class ExpeditionService
     private function resolveMerchant(Expedition $expedition): Expedition
     {
         $count  = rand(2, 3);
+        $kingdom = $expedition->kingdom_slug;
         $pieces = \App\Models\Equipment::with('element')
             ->where('level', 1)
+            ->where('kingdom_slug', $kingdom)
             ->inRandomOrder()
             ->limit($count)
             ->get();
