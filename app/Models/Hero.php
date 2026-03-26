@@ -60,7 +60,8 @@ class Hero extends Model
         }
         $resistenciaEfectiva = $this->resistencia + $bonusResistencia;
         $nuevoHP = self::calcularHP($resistenciaEfectiva);
-        $hpActual = min($this->hp_actual, $nuevoHP);
+        $proporcion = $this->hp_maximo > 0 ? $this->hp_actual / $this->hp_maximo : 1;
+        $hpActual = max(1, (int)round($nuevoHP * $proporcion));
         $this->update(['hp_maximo' => $nuevoHP, 'hp_actual' => $hpActual]);
     }
 
