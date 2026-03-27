@@ -61,7 +61,7 @@
             $esenciasEfectivas = $hero->talisman->esenciasEfectivas($hero);
             $esenciasFarmeadas = $hero->talisman->todasLasEsencias();
             $max = \App\Models\Talisman::MAX_ESENCIA;
-            $poderTotal = $hero->talisman->esenciaTotal();
+            $poderTotal = $hero->talisman->poderTotal();
         @endphp
         <div class="mb-5 p-3 border border-gray-200 bg-gray-50">
             <p class="text-xs text-gray-400 uppercase tracking-wide mb-2">Talismán — Esencias (Poder Total: {{ $poderTotal }})</p>
