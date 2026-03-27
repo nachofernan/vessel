@@ -89,37 +89,35 @@
                 @endforeach
             </div>
 
-            {{-- Poder vs cada reino --}}
-            <p class="text-xs text-gray-400 uppercase tracking-wide mb-2">Poder vs. reinos</p>
+            {{-- Arma y escudo activos --}}
             @php
-                $poderes = [];
-                foreach (\App\Models\Talisman::ELEMENTOS as $slug) {
-                    $poderes[$slug] = $hero->talisman->poderContra($slug, $hero);
-                }
-                $maxPoder = max($poderes) ?: 1;
+                $armaSlot   = $hero->equippedItems->first(fn($e) => $e->piece_type === 'arma');
+                $escudoSlot = $hero->equippedItems->first(fn($e) => $e->piece_type === 'escudo');
             @endphp
-            <div class="space-y-1">
-                @foreach($poderes as $slug => $poder)
-                    @php
-                        $color  = $colores[$slug];
-                        $barW   = round(($poder / $maxPoder) * 100);
-                        $pEnem  = 100 * ($selectedDuration / 10); // anillo 1 siempre por ahora
-                        $chance = round(($poder / ($poder + $pEnem)) * 100);
-                    @endphp
-                    <div class="flex items-center gap-2">
-                        <span class="w-12 text-xs" style="color:{{ $color }}">{{ $nombres[$slug] }}</span>
-                        <div class="flex-1 bg-gray-200 h-1.5 rounded overflow-hidden">
-                            <div class="h-1.5 rounded" style="width:{{ $barW }}%; background:{{ $color }}"></div>
-                        </div>
-                        <span class="text-xs text-gray-500 w-8 text-right">{{ round($poder) }}</span>
-                        <span class="text-xs w-10 text-right font-bold
-                            {{ $chance >= 55 ? 'text-green-600' : ($chance >= 45 ? 'text-yellow-600' : 'text-red-500') }}">
-                            {{ $chance }}%
+            <div class="grid grid-cols-2 gap-2 mt-1">
+                <div class="text-xs">
+                    <span class="text-gray-400 uppercase tracking-wide">Arma</span><br>
+                    @if($armaSlot)
+                        <span style="color:{{ $colores[$armaSlot->equipment->element->slug] ?? '#9ca3af' }}">
+                            ● {{ $armaSlot->equipment->element->name }}
                         </span>
-                    </div>
-                @endforeach
+                        <span class="text-gray-500"> · {{ $armaSlot->equipment->name }} · ATQ+{{ $armaSlot->statEfectivo() }}</span>
+                    @else
+                        <span class="text-gray-300 italic">— sin arma —</span>
+                    @endif
+                </div>
+                <div class="text-xs">
+                    <span class="text-gray-400 uppercase tracking-wide">Escudo</span><br>
+                    @if($escudoSlot)
+                        <span style="color:{{ $colores[$escudoSlot->equipment->element->slug] ?? '#9ca3af' }}">
+                            ● {{ $escudoSlot->equipment->element->name }}
+                        </span>
+                        <span class="text-gray-500"> · {{ $escudoSlot->equipment->name }} · DEF+{{ $escudoSlot->statEfectivo() }}</span>
+                    @else
+                        <span class="text-gray-300 italic">— sin escudo —</span>
+                    @endif
+                </div>
             </div>
-            <p class="text-xs text-gray-300 mt-2">% = chance de golpear vs reino en {{ $selectedDuration }}s · anillo 1</p>
         </div>
 
         <hr class="my-4">
@@ -450,6 +448,24 @@
                                     &nbsp;·&nbsp; Alin+{{ $item['alignment_bonus_efectivo'] }}
                                     &nbsp;·&nbsp; Carga: {{ $item['carga'] }}/{{ $item['carga_maxima'] }}
                                 </span>
+                                @php
+                                    $yaEquipado = $hero->equippedItems
+                                        ->first(fn($e) => $e->equipment_id === $item['equipment_id']);
+                                    $yaEnMochila = $hero->inventory
+                                        ->first(fn($i) => $i->equipment_id === $item['equipment_id']);
+                                    $itemColor = $item['element_color'];
+                                @endphp
+                                @if($yaEquipado)
+                                    <br><span class="text-xs text-blue-500">
+                                        ⟳ Equipado · carga {{ $yaEquipado->carga }}/{{ $item['carga_maxima'] }}
+                                        → fusión a {{ min($item['carga_maxima'], $yaEquipado->carga + $item['carga']) }}
+                                    </span>
+                                @elseif($yaEnMochila)
+                                    <br><span class="text-xs text-indigo-400">
+                                        ↓ En mochila · carga {{ $yaEnMochila->carga }}/{{ $item['carga_maxima'] }}
+                                        → fusión a {{ min($item['carga_maxima'], $yaEnMochila->carga + $item['carga']) }}
+                                    </span>
+                                @endif
                             </div>
                             <div class="shrink-0 text-right">
                                 <div class="text-xs text-gray-500 mb-1">{{ $item['precio'] }} oro</div>
@@ -672,7 +688,7 @@
                 Volver al Refugio
             </button>
         @endif
-        
+
     {{-- ═══════════════════════════════════════════════════════════ MERCADO ══ --}}
     @elseif($phase === 'market')
         @php
@@ -747,6 +763,24 @@
                                 &nbsp;·&nbsp;
                                 Carga: {{ $item['carga'] }}/{{ $item['carga_maxima'] }}
                             </span>
+                            @php
+                                $yaEquipado = $hero->equippedItems
+                                    ->first(fn($e) => $e->equipment_id === $item['equipment_id']);
+                                $yaEnMochila = $hero->inventory
+                                    ->first(fn($i) => $i->equipment_id === $item['equipment_id']);
+                                $itemColor = $item['element_color'];
+                            @endphp
+                            @if($yaEquipado)
+                                <br><span class="text-xs text-blue-500">
+                                    ⟳ Equipado · carga {{ $yaEquipado->carga }}/{{ $item['carga_maxima'] }}
+                                    → fusión a {{ min($item['carga_maxima'], $yaEquipado->carga + $item['carga']) }}
+                                </span>
+                            @elseif($yaEnMochila)
+                                <br><span class="text-xs text-indigo-400">
+                                    ↓ En mochila · carga {{ $yaEnMochila->carga }}/{{ $item['carga_maxima'] }}
+                                    → fusión a {{ min($item['carga_maxima'], $yaEnMochila->carga + $item['carga']) }}
+                                </span>
+                            @endif
                         </div>
 
                         {{-- Precio y acción --}}
