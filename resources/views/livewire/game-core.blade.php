@@ -645,18 +645,34 @@
                     </div>
                 @endforeach
             </div>
-            @if(!$resultado['hero_won'])
-                <button wire:click="launchRest" class="bg-gray-700 text-white px-4 py-2 text-sm mr-2">
-                    Revivir
-                </button>
+            {{-- Acciones post-combate:
+                 Victoria  → solo "Volver al Refugio"
+                 Derrota   → "Descansar (10s)" + "Volver al Refugio"
+                 Ambos botones siempre visibles para no dejar al jugador atrapado --}}
+            @if(!$heroWon)
+                <div class="flex gap-2 mb-3">
+                    <button wire:click="launchRest"
+                            class="bg-gray-700 text-white px-4 py-2 text-sm">
+                        Descansar (10s)
+                    </button>
+                    <button wire:click="backToHub"
+                            class="bg-black text-white px-4 py-2 text-sm">
+                        Volver al Refugio
+                    </button>
+                </div>
             @endif
+
         @endif
 
         <p class="text-xs text-gray-500 mb-3">Oro total: {{ $hero->oro }}</p>
+
+        {{-- Botón de volver siempre disponible (en victoria aparece solo este) --}}
+        @if($heroWon ?? true)
+            <button wire:click="backToHub" class="bg-black text-white px-4 py-2 text-sm">
+                Volver al Refugio
+            </button>
+        @endif
         
-        <button wire:click="backToHub" class="bg-black text-white px-4 py-2 text-sm">
-            Volver al Refugio
-        </button>
     {{-- ═══════════════════════════════════════════════════════════ MERCADO ══ --}}
     @elseif($phase === 'market')
         @php
