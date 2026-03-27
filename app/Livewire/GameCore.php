@@ -38,6 +38,20 @@ class GameCore extends Component
         'anima'  => ['name' => 'Ánima',  'color' => '#9ca3af'],
     ];
 
+    /**
+     * Esencia farmeada mínima requerida para cada duración (anillo 1).
+     * Fórmula: (duracion - 10) * 2
+     * 10s → 0  ·  20s → 20  ·  30s → 40  ·  40s → 60  ·  50s → 80
+     * Guardián (60s) requiere 100 — se implementa por separado.
+     */
+    public const DURACION_ESENCIA_MINIMA = [
+        10 => 0,
+        20 => 20,
+        30 => 40,
+        40 => 60,
+        50 => 80,
+    ];
+
     // ─── Mount ───────────────────────────────────────────────────────────────
 
     public function mount(): void
@@ -74,7 +88,6 @@ class GameCore extends Component
         $hero->update(['hp_actual' => $hp, 'hp_maximo' => $hp]);
 
         Talisman::create(['hero_id' => $hero->id]);
-
         $this->giveStarterEquipment($hero);
 
         session(['hero_id' => $hero->id]);
@@ -118,6 +131,12 @@ class GameCore extends Component
     public function launchExpedition(): void
     {
         $this->hero = $this->loadHero($this->heroId);
+
+        // Validación en servidor: defensa en profundidad por si el blade es bypasseado
+        if (!$this->duracionDesbloqueada($this->selectedDuration, $this->selectedKingdom)) {
+            return;
+        }
+
         $service    = app(ExpeditionService::class);
         $expedition = $service->launch($this->hero, $this->selectedDuration, $this->selectedKingdom);
 
@@ -137,6 +156,28 @@ class GameCore extends Component
         $this->secondsLeft  = 10;
         $this->phase        = 'waiting';
         $this->resultado    = null;
+    }
+
+    /**
+     * Seleccionar duración desde el blade. Solo acepta si está desbloqueada.
+     */
+    public function selectDuration(int $duration): void
+    {
+        if ($this->duracionDesbloqueada($duration, $this->selectedKingdom)) {
+            $this->selectedDuration = $duration;
+        }
+    }
+
+    /**
+     * Al cambiar de reino, ajustar la duración seleccionada si ya no está disponible.
+     */
+    public function updatedSelectedKingdom(): void
+    {
+        $this->hero = $this->loadHero($this->heroId);
+        if (!$this->duracionDesbloqueada($this->selectedDuration, $this->selectedKingdom)) {
+            $esencia = $this->hero->talisman->getEsencia($this->selectedKingdom);
+            $this->selectedDuration = $this->maxDuracionPermitida($esencia);
+        }
     }
 
     // ─── Inventario ──────────────────────────────────────────────────────────
@@ -168,12 +209,10 @@ class GameCore extends Component
 
         if ($currentSlot) {
             if ($currentSlot->equipment_id === $newPiece->id) {
-                // Fusión: mismo item → sumar carga al slot equipado
                 $maxCarga   = $newPiece->carga_maxima;
                 $nuevaCarga = min($maxCarga, $currentSlot->carga + $invRow->carga);
                 $currentSlot->update(['carga' => $nuevaCarga]);
                 $invRow->delete();
-                // FIX: recalcular HP si el pecho cambia de carga por fusión
                 if ($pieceType === 'pecho') {
                     $this->hero = $this->loadHero($this->heroId);
                     $this->hero->recalcularHP();
@@ -181,7 +220,6 @@ class GameCore extends Component
                 $this->hero = $this->loadHero($this->heroId);
                 return;
             }
-            // Item distinto → desquipar el actual al inventario
             $this->addToInventory($this->heroId, $currentSlot->equipment_id, $currentSlot->carga);
             $currentSlot->delete();
         }
@@ -229,7 +267,6 @@ class GameCore extends Component
 
         if ($result['ok']) {
             $this->hero        = $this->loadHero($this->heroId);
-            // FIX: refrescar stock inmediatamente para que el ítem comprado desaparezca
             $this->marketStock = $this->buildMarketStock();
         }
     }
@@ -275,7 +312,51 @@ class GameCore extends Component
         }
     }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────
+    // ─── Helpers de acceso por esencia ───────────────────────────────────────
+
+    /**
+     * True si la esencia farmeada del reino supera el mínimo requerido para esa duración.
+     */
+    public function duracionDesbloqueada(int $duracion, string $kingdom): bool
+    {
+        $minima = self::DURACION_ESENCIA_MINIMA[$duracion] ?? 999;
+        $actual = $this->hero?->talisman->getEsencia($kingdom) ?? 0;
+        return $actual >= $minima;
+    }
+
+    /**
+     * Duración máxima disponible para una cantidad de esencia dada.
+     */
+    public function maxDuracionPermitida(int $esencia): int
+    {
+        $max = 10;
+        foreach (self::DURACION_ESENCIA_MINIMA as $dur => $min) {
+            if ($esencia >= $min) {
+                $max = $dur;
+            }
+        }
+        return $max;
+    }
+
+    /**
+     * Array de todas las duraciones con estado de acceso para el reino seleccionado.
+     * Usado en el blade para renderizar los botones con bloqueo visual.
+     */
+    public function duracionesParaKingdom(string $kingdom): array
+    {
+        $esencia = $this->hero?->talisman->getEsencia($kingdom) ?? 0;
+        $result  = [];
+        foreach (self::DURACION_ESENCIA_MINIMA as $dur => $min) {
+            $result[] = [
+                'duracion'          => $dur,
+                'desbloqueada'      => $esencia >= $min,
+                'esencia_requerida' => $min,
+            ];
+        }
+        return $result;
+    }
+
+    // ─── Helpers internos ────────────────────────────────────────────────────
 
     private function addToInventory(int $heroId, int $equipmentId, int $carga): void
     {
@@ -290,9 +371,6 @@ class GameCore extends Component
         }
     }
 
-    /**
-     * Construye el stock del mercado filtrando los ítems ya comprados en esta sesión.
-     */
     private function buildMarketStock(): array
     {
         $purchased = session('market_purchased', []);

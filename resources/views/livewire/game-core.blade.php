@@ -103,7 +103,7 @@
                     @php
                         $color  = $colores[$slug];
                         $barW   = round(($poder / $maxPoder) * 100);
-                        $pEnem  = 100 * ($selectedDuration / 10);
+                        $pEnem  = 100 * ($selectedDuration / 10); // anillo 1 siempre por ahora
                         $chance = round(($poder / ($poder + $pEnem)) * 100);
                     @endphp
                     <div class="flex items-center gap-2">
@@ -150,17 +150,54 @@
             @endforeach
         </div>
 
-        {{-- Selector de duración --}}
-        <label class="block text-xs text-gray-400 uppercase tracking-wide mb-1">
-            Duración: {{ $selectedDuration }}s
-        </label>
-        <input type="range" wire:model="selectedDuration" min="10" max="50" step="10"
-               class="w-full mb-4" />
+        {{-- Selector de duración — botones con bloqueo por esencia farmeada --}}
+        @php
+            $duraciones   = $this->duracionesParaKingdom($selectedKingdom);
+            $kColor       = \App\Livewire\GameCore::KINGDOMS[$selectedKingdom]['color'] ?? '#111';
+            $esenciaActual = $hero->talisman->getEsencia($selectedKingdom);
+        @endphp
+        <p class="text-xs text-gray-400 uppercase tracking-wide mb-2">Duración de expedición</p>
+        <div class="flex gap-2 mb-1">
+            @foreach($duraciones as $opcion)
+                @php
+                    $activo     = $selectedDuration === $opcion['duracion'];
+                    $bloqueado  = !$opcion['desbloqueada'];
+                @endphp
+                @if($bloqueado)
+                    {{-- Bloqueado: no clickeable, muestra esencia requerida --}}
+                    <div class="flex-1 text-center border border-dashed border-gray-200 py-2 px-1 rounded opacity-50 cursor-not-allowed"
+                         title="Requiere {{ $opcion['esencia_requerida'] }} de esencia">
+                        <div class="text-xs text-gray-400 font-bold">{{ $opcion['duracion'] }}s</div>
+                        <div class="text-xs text-gray-300 leading-none mt-0.5">
+                            ⊘ {{ $opcion['esencia_requerida'] }}
+                        </div>
+                    </div>
+                @else
+                    {{-- Disponible: clickeable --}}
+                    <button wire:click="selectDuration({{ $opcion['duracion'] }})"
+                            class="flex-1 text-center border py-2 px-1 rounded transition-all"
+                            style="
+                                border-color: {{ $activo ? $kColor : '#e5e7eb' }};
+                                background: {{ $activo ? $kColor.'22' : 'white' }};
+                                color: {{ $activo ? $kColor : '#6b7280' }};
+                            ">
+                        <div class="text-xs font-bold">{{ $opcion['duracion'] }}s</div>
+                        <div class="text-xs leading-none mt-0.5"
+                             style="color: {{ $activo ? $kColor : '#d1d5db' }}">
+                            {{ $opcion['esencia_requerida'] > 0 ? '≥'.$opcion['esencia_requerida'] : 'libre' }}
+                        </div>
+                    </button>
+                @endif
+            @endforeach
+        </div>
+        <p class="text-xs text-gray-300 mb-4">
+            Esencia {{ \App\Models\Talisman::NOMBRES[$selectedKingdom] }} farmeada: <strong class="text-gray-400">{{ $esenciaActual }}/100</strong>
+        </p>
 
         <button wire:click="launchExpedition"
                 class="text-white px-4 py-2 text-sm"
-                style="background: {{ \App\Livewire\GameCore::KINGDOMS[$selectedKingdom]['color'] ?? '#111' }}">
-            Partir — Reino de {{ \App\Livewire\GameCore::KINGDOMS[$selectedKingdom]['name'] }}
+                style="background: {{ $kColor }}">
+            Partir — Reino de {{ \App\Livewire\GameCore::KINGDOMS[$selectedKingdom]['name'] }} · {{ $selectedDuration }}s
         </button>
 
     {{-- ═══════════════════════════════════════════════════════ INVENTARIO ══ --}}
@@ -174,19 +211,10 @@
             $nombres  = \App\Models\Talisman::NOMBRES;
 
             $statLabel = [
-                'casco'   => 'INT', 'pecho'   => 'RES', 'brazos'  => 'FUE',
-                'piernas' => 'DES', 'escudo'  => 'DEF', 'arma'    => 'ATQ', 'amuleto' => 'SUE',
+                'casco'=>'INT','pecho'=>'RES','brazos'=>'FUE',
+                'piernas'=>'DES','escudo'=>'DEF','arma'=>'ATQ','amuleto'=>'SUE',
             ];
             $elementColor = $colores;
-
-            // Agrupar inventario por slot (en el orden canónico de $slots)
-            $inventoryBySlot = collect($slots)->mapWithKeys(fn($s) => [$s => collect()])->toArray();
-            foreach ($hero->inventory as $invRow) {
-                $t = $invRow->equipment->piece_type;
-                if (isset($inventoryBySlot[$t])) {
-                    $inventoryBySlot[$t][] = $invRow;
-                }
-            }
         @endphp
 
         <div class="flex justify-between items-center mb-4">
@@ -234,98 +262,100 @@
             </div>
         </div>
 
-        {{-- Slots equipados + mochila agrupada por slot --}}
-        @foreach($slots as $slot)
-            @php
-                $slotData    = $equipped[$slot] ?? null;
-                $itemsEnSlot = $inventoryBySlot[$slot] ?? collect();
-                $tieneItems  = count($itemsEnSlot) > 0;
-            @endphp
-
-            {{-- Cabecera de slot --}}
-            <div class="flex items-center gap-2 mt-4 mb-1">
-                <span class="text-xs font-bold text-gray-500 uppercase tracking-wide w-14 shrink-0">{{ $slot }}</span>
-                <div class="flex-1 border-t border-gray-100"></div>
-            </div>
-
-            {{-- Equipado --}}
-            <div class="flex items-center border border-gray-300 bg-gray-50 px-3 py-2 mb-1">
-                @if($slotData)
-                    @php $eq = $slotData->equipment; $c = $elementColor[$eq->element->slug] ?? '#9ca3af'; @endphp
-                    <div class="flex-1 leading-tight">
-                        <span class="font-semibold">{{ $eq->name }}</span>
-                        <span class="ml-1 text-xs px-1 rounded"
-                              style="background:{{ $c }}22;color:{{ $c }};border:1px solid {{ $c }}55">
-                            {{ $eq->element->name }}
-                        </span>
-                        <span class="ml-1 text-gray-400 text-xs">
-                            Nv{{ $eq->level }}
-                            &nbsp;·&nbsp; {{ $statLabel[$slot] }}+{{ $slotData->statEfectivo() }}
-                            &nbsp;·&nbsp; Alin+{{ $slotData->alignmentEfectivo() }}
-                            &nbsp;·&nbsp; carga {{ $slotData->carga }}/{{ $eq->carga_maxima }}
-                        </span>
-                    </div>
-                    <button wire:click="unequipItem('{{ $slot }}')"
-                            class="text-xs text-gray-400 hover:text-red-500 shrink-0 ml-2">Quitar</button>
-                @else
-                    <span class="text-gray-300 italic text-xs">— vacío —</span>
-                @endif
-            </div>
-
-            {{-- Items en mochila para este slot --}}
-            @if($tieneItems)
-                @foreach($itemsEnSlot as $invRow)
-                    @php
-                        $eq  = $invRow->equipment;
-                        $c   = $elementColor[$eq->element->slug] ?? '#9ca3af';
-
-                        // Calcular diff usando statEfectivo (con carga), no stat_bonus base
-                        $esFusion    = $slotData && $slotData->equipment_id === $eq->id;
-                        $statNuevo   = $invRow->statEfectivo();
-                        $statActual  = $slotData ? $slotData->statEfectivo() : null;
-                        $diff        = ($statActual !== null && !$esFusion) ? $statNuevo - $statActual : null;
-                        $cargaFusion = $esFusion ? min($eq->carga_maxima, $slotData->carga + $invRow->carga) : null;
-                    @endphp
-                    <div class="flex items-center border border-gray-100 border-l-2 ml-2 px-3 py-2 hover:bg-gray-50"
-                         style="border-left-color:{{ $c }}">
-                        <div class="flex-1 leading-tight">
+        {{-- Slots equipados --}}
+        <p class="text-xs text-gray-400 uppercase tracking-wide mb-2">Equipo equipado</p>
+        <div class="space-y-1 mb-5">
+            @foreach($slots as $slot)
+                @php $slotData = $equipped[$slot] ?? null; @endphp
+                <div class="flex items-center border border-gray-200 px-3 py-2">
+                    <div class="w-14 text-gray-400 text-xs uppercase shrink-0">{{ $slot }}</div>
+                    @if($slotData)
+                        @php $eq = $slotData->equipment; $c = $elementColor[$eq->element->slug] ?? '#9ca3af'; @endphp
+                        <div class="flex-1 mx-2 leading-tight">
                             <span class="font-semibold">{{ $eq->name }}</span>
                             <span class="ml-1 text-xs px-1 rounded"
                                   style="background:{{ $c }}22;color:{{ $c }};border:1px solid {{ $c }}55">
                                 {{ $eq->element->name }}
                             </span>
                             <span class="ml-1 text-gray-400 text-xs">
-                                Nv{{ $eq->level }}
-                                &nbsp;·&nbsp; {{ $statLabel[$slot] }}+{{ $statNuevo }}
-                                &nbsp;·&nbsp; Alin+{{ $invRow->equipment->alignmentEfectivo($invRow->carga) }}
-                                &nbsp;·&nbsp; carga {{ $invRow->carga }}/{{ $eq->carga_maxima }}
+                                Nv{{ $eq->level }} · {{ $statLabel[$slot] }}+{{ $slotData->statEfectivo() }}
+                                · carga {{ $slotData->carga }}/{{ $eq->carga_maxima }}
                             </span>
-                            {{-- Indicador de fusión o diff --}}
+                        </div>
+                        <button wire:click="unequipItem('{{ $slot }}')"
+                                class="text-xs text-gray-400 hover:text-red-500 shrink-0">Quitar</button>
+                    @else
+                        <div class="flex-1 mx-2 text-gray-300 italic text-xs">— vacío —</div>
+                    @endif
+                </div>
+            @endforeach
+        </div>
+
+        {{-- Mochila --}}
+        <p class="text-xs text-gray-400 uppercase tracking-wide mb-2">
+            Mochila — {{ $hero->inventory->count() }} items
+        </p>
+        @if($hero->inventory->isEmpty())
+            <p class="text-gray-300 italic text-xs">Vacía. Los items se obtienen en expediciones.</p>
+        @else
+            <div class="space-y-1">
+                @foreach($hero->inventory as $invRow)
+                    @php
+                        $eq   = $invRow->equipment;
+                        $c    = $elementColor[$eq->element->slug] ?? '#9ca3af';
+                        $cur  = $equipped[$eq->piece_type] ?? null;
+                        $diff = $cur ? $eq->stat_bonus - $cur->equipment->stat_bonus : null;
+                    @endphp
+                    <div class="flex items-center border border-gray-100 px-3 py-2 hover:bg-gray-50">
+                        <div class="w-14 text-gray-400 text-xs uppercase shrink-0">{{ $eq->piece_type }}</div>
+                        <div class="flex-1 mx-2 leading-tight">
+                            <span class="font-semibold">{{ $eq->name }}</span>
+                            @if($invRow->quantity > 1)
+                                <span class="text-gray-400 text-xs"> ×{{ $invRow->quantity }}</span>
+                            @endif
+                            <span class="ml-1 text-xs px-1 rounded"
+                                  style="background:{{ $c }}22;color:{{ $c }};border:1px solid {{ $c }}55">
+                                {{ $eq->element->name }}
+                            </span>
+                            <span class="ml-1 text-gray-400 text-xs">
+                                Nv{{ $eq->level }} · {{ $statLabel[$eq->piece_type] }}+{{ $eq->stat_bonus }}
+                            </span>
+                            @if($diff !== null)
+                                <span class="ml-1 text-xs font-bold {{ $diff > 0 ? 'text-green-600' : ($diff < 0 ? 'text-red-500' : 'text-gray-400') }}">
+                                    ({{ $diff > 0 ? '+' : '' }}{{ $diff }})
+                                </span>
+                            @endif
+                            @php
+                                $curSlot = $equipped[$eq->piece_type] ?? null;
+                                $statActual  = $curSlot ? $curSlot->statEfectivo() : null;
+                                $statNuevo   = $invRow->statEfectivo();
+                                $diff        = $statActual !== null ? $statNuevo - $statActual : null;
+                                $esFusion    = $curSlot && $curSlot->equipment_id === $eq->id;
+                                $cargaFusion = $esFusion ? min($eq->carga_maxima, $curSlot->carga + $invRow->carga) : null;
+                            @endphp
+
+                            <span class="ml-1 text-gray-400 text-xs">
+                                Nv{{ $eq->level }} · {{ $statLabel[$eq->piece_type] }}+{{ $invRow->statEfectivo() }}
+                                · carga {{ $invRow->carga }}/{{ $eq->carga_maxima }}
+                            </span>
+
                             @if($esFusion)
                                 <span class="ml-1 text-xs text-blue-500">
                                     ⟳ fusión → {{ $cargaFusion }}/{{ $eq->carga_maxima }}
                                 </span>
                             @elseif($diff !== null)
-                                <span class="ml-1 text-xs font-bold
-                                    {{ $diff > 0 ? 'text-green-600' : ($diff < 0 ? 'text-red-500' : 'text-gray-400') }}">
+                                <span class="ml-1 text-xs font-bold {{ $diff > 0 ? 'text-green-600' : ($diff < 0 ? 'text-red-500' : 'text-gray-400') }}">
                                     ({{ $diff > 0 ? '+' : '' }}{{ $diff }})
                                 </span>
-                            @else
-                                <span class="ml-1 text-xs text-gray-300">(slot vacío)</span>
                             @endif
                         </div>
                         <button wire:click="equipItem({{ $invRow->id }})"
-                                class="text-xs bg-black text-white px-2 py-1 hover:bg-gray-700 shrink-0 ml-2">
-                            {{ $esFusion ? 'Fusionar' : 'Equipar' }}
+                                class="text-xs bg-black text-white px-2 py-1 hover:bg-gray-700 shrink-0">
+                            Equipar
                         </button>
                     </div>
                 @endforeach
-            @endif
-        @endforeach
-
-        {{-- Resumen de mochila si está vacía --}}
-        @if($hero->inventory->isEmpty())
-            <p class="text-gray-300 italic text-xs mt-4">Mochila vacía. Los items se obtienen en expediciones.</p>
+            </div>
         @endif
 
     {{-- ═══════════════════════════════════════════════════════ ESPERANDO ══ --}}
@@ -354,8 +384,8 @@
     {{-- ═══════════════════════════════════════════════════════ RESULTADO ══ --}}
     @elseif($phase === 'result' && $resultado)
         @php
-            $colores  = \App\Models\Talisman::COLORES;
-            $nombres  = \App\Models\Talisman::NOMBRES;
+            $colores = \App\Models\Talisman::COLORES;
+            $nombres = \App\Models\Talisman::NOMBRES;
             $esencias = $hero->talisman->todasLasEsencias();
         @endphp
 
@@ -367,6 +397,7 @@
 
         @elseif(($resultado['event'] ?? null) === 'merchant')
             @php
+                $colores   = \App\Models\Talisman::COLORES;
                 $statLabel = [
                     'casco'=>'INT','pecho'=>'RES','brazos'=>'FUE',
                     'piernas'=>'DES','escudo'=>'DEF','arma'=>'ATQ','amuleto'=>'SUE',
@@ -465,12 +496,12 @@
                 @endif
                 @if($resultado['toco_loot'] && $resultado['loot_item_name'])
                     @php
-                        $lootSlug     = $resultado['loot_item_slug'];
-                        $lootFusion   = $resultado['loot_fusion'] ?? false;
-                        $cargaAntes   = $resultado['loot_carga_antes'] ?? 0;
-                        $cargaDrop    = $resultado['loot_carga_drop'] ?? 0;
+                        $lootSlug   = $resultado['loot_item_slug'];
+                        $lootFusion = $resultado['loot_fusion'] ?? false;
+                        $cargaAntes = $resultado['loot_carga_antes'] ?? 0;
+                        $cargaDrop  = $resultado['loot_carga_drop'] ?? 0;
                         $cargaDespues = $resultado['loot_carga_despues'] ?? 0;
-                        $cargaMax     = $resultado['loot_carga_maxima'] ?? 100;
+                        $cargaMax   = $resultado['loot_carga_maxima'] ?? 100;
                     @endphp
                     <p>+ {{ $lootFusion ? 'Fusión' : 'Loot' }}:
                         <strong>{{ $resultado['loot_item_name'] }}</strong>
@@ -495,18 +526,17 @@
             </div>
 
         @else
-            {{-- ─── Resultado de combate ──────────────────────────────────── --}}
             @php
-                $kingdom = $resultado['kingdom'] ?? $selectedKingdom;
-                $kColor  = $colores[$kingdom] ?? '#9ca3af';
-                $heroWon = $resultado['hero_won'];
-                $enemy   = $resultado['enemy'];
-                $hpLeft  = $resultado['hero_hp_left'];
-                $hpMax   = $hero->hp_maximo;
-                $hpPct   = $hpMax > 0 ? round(($hpLeft / $hpMax) * 100) : 0;
-                $hpColor = $hpPct > 55 ? 'text-green-600' : ($hpPct > 25 ? 'text-yellow-600' : 'text-red-500');
-                $chanceH = $resultado['chance_heroe_golpea'] ?? '—';
-                $chanceE = $resultado['chance_enemigo_golpea'] ?? '—';
+                $kingdom   = $resultado['kingdom'] ?? $selectedKingdom;
+                $kColor    = $colores[$kingdom] ?? '#9ca3af';
+                $heroWon   = $resultado['hero_won'];
+                $enemy     = $resultado['enemy'];
+                $hpLeft    = $resultado['hero_hp_left'];
+                $hpMax     = $hero->hp_maximo;
+                $hpPct     = $hpMax > 0 ? round(($hpLeft / $hpMax) * 100) : 0;
+                $hpColor   = $hpPct > 55 ? 'text-green-600' : ($hpPct > 25 ? 'text-yellow-600' : 'text-red-500');
+                $chanceH   = $resultado['chance_heroe_golpea'] ?? '—';
+                $chanceE   = $resultado['chance_enemigo_golpea'] ?? '—';
             @endphp
 
             {{-- Encabezado --}}
@@ -520,10 +550,8 @@
             <div class="grid grid-cols-2 gap-3 mb-4 text-xs">
                 <div class="border border-gray-200 p-2 bg-gray-50">
                     <p class="font-bold mb-1">{{ $hero->name }}</p>
-                    <p>HP: <span class="font-bold {{ $heroWon ? $hpColor : 'text-red-500' }}">
-                        {{ $heroWon ? $hpLeft : 0 }}/{{ $hpMax }}</span>
-                        <span class="text-gray-400">({{ $heroWon ? $hpPct : 0 }}%)</span>
-                    </p>
+                    <p>HP: <span class="font-bold {{ $hpColor }}">{{ $hpLeft }}/{{ $hpMax }}</span>
+                    <span class="text-gray-400">({{ $hpPct }}%)</span></p>
                     <p>Ataque: {{ $hero->ataque }} · Defensa: {{ $hero->defensa }}</p>
                     <p>Poder (vs {{ $nombres[$kingdom] ?? $kingdom }}):
                     <strong>{{ round($hero->talisman->poderContra($kingdom, $hero)) }}</strong></p>
@@ -558,23 +586,21 @@
                 </div>
                 <div class="border border-gray-200 p-2">
                     <div class="text-gray-400">HP restante</div>
-                    <div class="font-bold text-base {{ $heroWon ? $hpColor : 'text-red-500' }}">
-                        {{ $heroWon ? $hpLeft : 0 }}
-                    </div>
+                    <div class="font-bold text-base {{ $hpColor }}">{{ $hpLeft }}</div>
                 </div>
             </div>
 
             {{-- Loot --}}
             @if($resultado['loot_item_name'])
                 @php
-                    $lootSlug     = $resultado['loot_item_slug'];
-                    $lootFusion   = $resultado['loot_fusion'] ?? false;
-                    $cargaAntes   = $resultado['loot_carga_antes'] ?? 0;
-                    $cargaDrop    = $resultado['loot_carga_drop'] ?? 0;
+                    $lootSlug   = $resultado['loot_item_slug'];
+                    $lootFusion = $resultado['loot_fusion'] ?? false;
+                    $cargaAntes = $resultado['loot_carga_antes'] ?? 0;
+                    $cargaDrop  = $resultado['loot_carga_drop'] ?? 0;
                     $cargaDespues = $resultado['loot_carga_despues'] ?? 0;
-                    $cargaMax     = $resultado['loot_carga_maxima'] ?? 100;
+                    $cargaMax   = $resultado['loot_carga_maxima'] ?? 100;
                 @endphp
-                <p class="mb-3">+ {{ $lootFusion ? 'Fusión' : 'Loot' }}:
+                <p>+ {{ $lootFusion ? 'Fusión' : 'Loot' }}:
                     <strong>{{ $resultado['loot_item_name'] }}</strong>
                     <span class="px-1 rounded"
                         style="background:{{ ($colores[$lootSlug] ?? '#ccc') }}22;
@@ -612,40 +638,23 @@
                     </div>
                 @endforeach
             </div>
-
-            {{-- Acciones post-combate:
-                 Victoria  → solo "Volver al Refugio"
-                 Derrota   → "Descansar (10s)" + "Volver al Refugio"
-                 Ambos botones siempre visibles para no dejar al jugador atrapado --}}
-            @if(!$heroWon)
-                <div class="flex gap-2 mb-3">
-                    <button wire:click="launchRest"
-                            class="bg-gray-700 text-white px-4 py-2 text-sm">
-                        Descansar (10s)
-                    </button>
-                    <button wire:click="backToHub"
-                            class="bg-black text-white px-4 py-2 text-sm">
-                        Volver al Refugio
-                    </button>
-                </div>
+            @if(!$resultado['hero_won'])
+                <button wire:click="launchRest" class="bg-gray-700 text-white px-4 py-2 text-sm mr-2">
+                    Revivir
+                </button>
             @endif
-
         @endif
 
         <p class="text-xs text-gray-500 mb-3">Oro total: {{ $hero->oro }}</p>
-
-        {{-- Botón de volver siempre disponible (en victoria aparece solo este) --}}
-        @if($heroWon ?? true)
-            <button wire:click="backToHub" class="bg-black text-white px-4 py-2 text-sm">
-                Volver al Refugio
-            </button>
-        @endif
-
+        
+        <button wire:click="backToHub" class="bg-black text-white px-4 py-2 text-sm">
+            Volver al Refugio
+        </button>
     {{-- ═══════════════════════════════════════════════════════════ MERCADO ══ --}}
     @elseif($phase === 'market')
         @php
-            $colores   = \App\Models\Talisman::COLORES;
-            $nombres   = \App\Models\Talisman::NOMBRES;
+            $colores = \App\Models\Talisman::COLORES;
+            $nombres = \App\Models\Talisman::NOMBRES;
             $statLabel = [
                 'casco'=>'INT','pecho'=>'RES','brazos'=>'FUE',
                 'piernas'=>'DES','escudo'=>'DEF','arma'=>'ATQ','amuleto'=>'SUE',
@@ -672,12 +681,16 @@
             </div>
         @endif
 
-        <p class="text-xs text-gray-400 mb-4">
+        <p class="text-xs text-gray-400 mb-1">
             El stock se renueva cada minuto. Precio fijo: <strong>100 oro</strong> por ítem.
         </p>
 
-        {{-- Poll para renovación automática del stock --}}
-        <div wire:poll.60000ms="refreshMarket"></div>
+        {{-- Contador de renovación --}}
+        <div wire:poll.10000ms="refreshMarket" class="mb-4">
+            <p class="text-xs text-gray-300 italic">
+                El mercader ordena su mesa...
+            </p>
+        </div>
 
         @if(empty($marketStock))
             <p class="text-gray-400 italic text-xs">El mercado está vacío.</p>
@@ -690,9 +703,13 @@
                     @endphp
                     <div class="flex items-center border border-gray-200 px-3 py-2
                                 {{ $canBuy ? 'hover:bg-gray-50' : 'opacity-50' }}">
+
+                        {{-- Slot --}}
                         <div class="w-14 text-gray-400 text-xs uppercase shrink-0">
                             {{ $item['piece_type'] }}
                         </div>
+
+                        {{-- Info --}}
                         <div class="flex-1 mx-2 leading-tight">
                             <span class="font-semibold text-sm">{{ $item['name'] }}</span>
                             <span class="ml-1 text-xs px-1 rounded"
@@ -708,6 +725,8 @@
                                 Carga: {{ $item['carga'] }}/{{ $item['carga_maxima'] }}
                             </span>
                         </div>
+
+                        {{-- Precio y acción --}}
                         <div class="shrink-0 text-right">
                             <div class="text-xs text-gray-500 mb-1">{{ $item['precio'] }} oro</div>
                             @if($canBuy)
