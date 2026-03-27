@@ -624,23 +624,25 @@
                     $cargaDespues = $resultado['loot_carga_despues'] ?? 0;
                     $cargaMax   = $resultado['loot_carga_maxima'] ?? 100;
                 @endphp
-                <p>+ {{ $lootFusion ? 'Fusión' : 'Loot' }}:
-                    <strong>{{ $resultado['loot_item_name'] }}</strong>
-                    <span class="px-1 rounded"
-                        style="background:{{ ($colores[$lootSlug] ?? '#ccc') }}22;
-                                color:{{ $colores[$lootSlug] ?? '#666' }};
-                                border:1px solid {{ ($colores[$lootSlug] ?? '#ccc') }}55">
-                        {{ $nombres[$lootSlug] ?? $lootSlug }}
-                    </span>
-                    @if($lootFusion)
-                        <span class="text-blue-500">
-                            carga: {{ $cargaDespues }}/{{ $cargaMax }}
-                            ({{ $cargaAntes }}+{{ $cargaDrop }}{{ $cargaDespues >= $cargaMax ? ' · max' : '' }})
+                <div class="border border-gray-200 p-3 text-xs space-y-1 mb-4">
+                    <p>+ {{ $lootFusion ? 'Fusión' : 'Loot' }}:
+                        <strong>{{ $resultado['loot_item_name'] }}</strong>
+                        <span class="px-1 rounded"
+                            style="background:{{ ($colores[$lootSlug] ?? '#ccc') }}22;
+                                    color:{{ $colores[$lootSlug] ?? '#666' }};
+                                    border:1px solid {{ ($colores[$lootSlug] ?? '#ccc') }}55">
+                            {{ $nombres[$lootSlug] ?? $lootSlug }}
                         </span>
-                    @else
-                        <span class="text-gray-400">carga: {{ $cargaDrop }}/{{ $cargaMax }}</span>
-                    @endif
-                </p>
+                        @if($lootFusion)
+                            <span class="text-blue-500">
+                                carga: {{ $cargaDespues }}/{{ $cargaMax }}
+                                ({{ $cargaAntes }}+{{ $cargaDrop }}{{ $cargaDespues >= $cargaMax ? ' · max' : '' }})
+                            </span>
+                        @else
+                            <span class="text-gray-400">carga: {{ $cargaDrop }}/{{ $cargaMax }}</span>
+                        @endif
+                    </p>
+                </div>
             @endif
 
             {{-- Log de rondas --}}
