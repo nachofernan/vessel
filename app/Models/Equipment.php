@@ -61,7 +61,7 @@ class Equipment extends Model
      */
     public function statEfectivo(int $carga): int
     {
-        $k = (int)((-1 + sqrt(1 + 8 * $carga)) / 2);
+        $k = (int)((-1 + sqrt(1 + (8 * $carga))) / 2);
         return $this->stat_bonus + $k;
     }
 
@@ -70,7 +70,7 @@ class Equipment extends Model
      */
     public function alignmentEfectivo(int $carga): int
     {
-        $k = (int)((-1 + sqrt(1 + 8 * $carga)) / 2);
+        $k = (int)((-1 + sqrt(1 + (8 * $carga))) / 2);
         return $this->alignment_bonus + $k;
     }
 }
