@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -10,9 +9,6 @@ class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
 
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
         $elements = [
@@ -29,7 +25,6 @@ class DatabaseSeeder extends Seeder
             \App\Models\Element::create($element);
         }
 
-        // Función helper para obtener id por slug
         $id = fn(string $slug) => \App\Models\Element::where('slug', $slug)->value('id');
 
         $relations = [
@@ -41,6 +36,7 @@ class DatabaseSeeder extends Seeder
             'shadow' => ['strong' => ['water','earth'], 'weak' => ['light','fire'], 'neutral' => ['air']],
         ];
 
+        // Elementos clásicos entre sí
         foreach ($relations as $sourceSlug => $groups) {
             $sourceId = $id($sourceSlug);
             foreach ($groups['strong'] as $targetSlug) {
@@ -66,17 +62,33 @@ class DatabaseSeeder extends Seeder
             }
         }
 
-        // Ánima: 0.8 contra todos (incluyéndose a sí misma)
+        // Elementos clásicos atacando a Ánima: ×0.70 (Ánima es dura de penetrar)
         $animaId = $id('anima');
-        foreach (\App\Models\Element::all() as $target) {
+        foreach (['fire','water','earth','air','light','shadow'] as $slug) {
+            \App\Models\ElementRelation::create([
+                'source_element_id' => $id($slug),
+                'target_element_id' => $animaId,
+                'multiplier'        => 0.70,
+            ]);
+            // Elemento clásico atacado por Ánima: ×1.0 (Ánima es neutral ofensivamente)
             \App\Models\ElementRelation::create([
                 'source_element_id' => $animaId,
-                'target_element_id' => $target->id,
-                'multiplier'        => 0.80,
+                'target_element_id' => $id($slug),
+                'multiplier'        => 1.00,
             ]);
         }
-        
-        // Sembrar equipo
+
+        // Ánima vs Ánima: ×1.0 en ambas direcciones
+        \App\Models\ElementRelation::create([
+            'source_element_id' => $animaId,
+            'target_element_id' => $animaId,
+            'multiplier'        => 1.00,
+        ]);
+
+        // Elementos clásicos entre sí vs Ánima como escudo: ya cubierto arriba.
+        // Falta: elementos clásicos atacando a otros clásicos, Ánima ya no tiene
+        // relación "clásico atacando a clásico" — eso está en el loop de arriba.
+
         $this->call(EquipmentSeeder::class);
     }
 }

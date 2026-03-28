@@ -8,8 +8,8 @@ use App\Models\Hero;
 class CombatService
 {
     /**
-     * Construye el array del enemigo.
-     * El poder escala linealmente dentro del anillo según la duración de la expedición.
+     * Construye el enemigo común.
+     * Stats aleatorios basados en poder escalado por duración.
      */
     public function buildEnemy(string $elementSlug, int $ring = 1, int $durationSeconds = 10): array
     {
@@ -35,6 +35,41 @@ class CombatService
         ];
     }
 
+    /**
+     * Construye el guardián de anillo 1 para un reino.
+     * Stats fijos por diseño para que el encuentro sea determinista.
+     *
+     * Calibración: diseñado para ser desafiante con héroe que tiene
+     * arma/escudo de carga ~50-60 y esencias del reino en torno a 80-100.
+     * Poder ~650 (por encima del enemigo de 50s pero alcanzable con buen equipo).
+     *
+     * TODO: afinar estos valores con testeo.
+     */
+    public function buildGuardian(string $elementSlug): array
+    {
+        $guardians = [
+            'fire'   => ['name' => 'Dragón de Magma',          'poder' => 650, 'hp' => 280, 'ataque' => 58, 'defensa' => 52],
+            'water'  => ['name' => 'Leviatán de Aguas Profundas','poder'=> 650, 'hp' => 310, 'ataque' => 54, 'defensa' => 55],
+            'earth'  => ['name' => 'Coloso de Piedra',          'poder' => 650, 'hp' => 350, 'ataque' => 50, 'defensa' => 60],
+            'air'    => ['name' => 'Tormenta con Voluntad',     'poder' => 650, 'hp' => 240, 'ataque' => 62, 'defensa' => 48],
+            'light'  => ['name' => 'Ángel Ciego de Luz Pura',   'poder' => 650, 'hp' => 270, 'ataque' => 60, 'defensa' => 54],
+            'shadow' => ['name' => 'Sombra Sin Forma',          'poder' => 650, 'hp' => 260, 'ataque' => 56, 'defensa' => 50],
+            'anima'  => ['name' => 'Eco del Ánima',             'poder' => 700, 'hp' => 300, 'ataque' => 60, 'defensa' => 58],
+        ];
+
+        $g = $guardians[$elementSlug] ?? $guardians['fire'];
+
+        return [
+            'name'        => $g['name'],
+            'element'     => $elementSlug,
+            'poder'       => $g['poder'],
+            'hp'          => $g['hp'],
+            'ataque'      => $g['ataque'],
+            'defensa'     => $g['defensa'],
+            'is_guardian' => true,
+        ];
+    }
+
     public function resolve(Hero $hero, array $enemy): array
     {
         $hero->loadMissing('equippedItems.equipment.element');
@@ -52,9 +87,9 @@ class CombatService
         $elementoEscudo  = $hero->elementoEscudo();
         $elementoEnemigo = $enemy['element'];
 
-        $chanceHeroeGolpea   = $talisman->chanceDeGolpe($enemy['poder'], $elementoEnemigo);
-        $poderEnemigoVsHeroe = $enemy['poder'];
         $miPoderVsEnemigo    = $talisman->poderContra($elementoEnemigo);
+        $poderEnemigoVsHeroe = $enemy['poder'];
+        $chanceHeroeGolpea   = $miPoderVsEnemigo / ($miPoderVsEnemigo + $poderEnemigoVsHeroe);
         $chanceEnemigoGolpea = $poderEnemigoVsHeroe / ($poderEnemigoVsHeroe + $miPoderVsEnemigo);
 
         $heroAtaque  = $hero->ataque;
@@ -67,12 +102,12 @@ class CombatService
             $heroeGolpea   = (mt_rand(0, 1000) / 1000) < $chanceHeroeGolpea;
             $enemigoGolpea = (mt_rand(0, 1000) / 1000) < $chanceEnemigoGolpea;
 
-            // ── Modificadores de Destreza y Suerte ───────────────────────────
+            // ── Modificadores de Destreza ─────────────────────────────────────
             $dodged    = $enemigoGolpea && ((mt_rand(0, 100) / 100) < $this->dodgeChance($hero->destreza));
-            $doubleHit = $heroeGolpea   && ((mt_rand(0, 100) / 100) < $this->dodgeChance($hero->destreza * 0.5));
-            $critical  = $heroeGolpea   && ((mt_rand(0, 100) / 100) < ($hero->suerte / 200));
+            $doubleHit = $heroeGolpea   && ((mt_rand(0, 100) / 100) < $this->doubleHitChance($hero->destreza));
+            $critical  = $heroeGolpea   && ((mt_rand(0, 100) / 100) < $this->criticalChance($hero->destreza));
 
-            // ── Varianza ±15% ────────────────────────────────────────────────
+            // ── Varianza ±15% ─────────────────────────────────────────────────
             $variance = 0.85 + (mt_rand(0, 30) / 100);
 
             // ── Fase 2: daño (equipo elemental) ──────────────────────────────
@@ -80,7 +115,7 @@ class CombatService
             if ($heroeGolpea) {
                 $multOfensivo = $this->getMultiplier($elementoArma, $elementoEnemigo);
                 $dmgHero      = (int)($heroAtaque * $multOfensivo * $variance);
-                if ($critical)  $dmgHero *= 2;
+                if ($critical)  $dmgHero  = (int)($dmgHero * 2);
                 if ($doubleHit) $dmgHero  = (int)($dmgHero * 1.8);
                 $dmgHero = max(1, $dmgHero);
             }
@@ -111,9 +146,6 @@ class CombatService
             ];
         }
 
-        // Empate (ambos a 0 en la misma ronda, o límite de rondas con ambos en pie):
-        // se considera victoria del héroe. Si llegó al límite de rondas con el enemigo
-        // aún vivo pero el héroe también vivo, también es victoria por supervivencia.
         $heroWon = $enemyHp <= 0 || ($heroHp > 0 && $round >= $maxRounds);
 
         return [
@@ -131,7 +163,11 @@ class CombatService
 
     public function getMultiplier(string $sourceSlug, string $targetSlug): float
     {
-        if ($sourceSlug === 'anima') return 1.25;
+        // Ánima atacando: siempre ×1.0
+        if ($sourceSlug === 'anima') return 1.0;
+
+        // No-Ánima atacando a Ánima: ×0.70
+        if ($targetSlug === 'anima') return 0.70;
 
         $relation = ElementRelation::whereHas('sourceElement', fn($q) => $q->where('slug', $sourceSlug))
             ->whereHas('targetElement', fn($q) => $q->where('slug', $targetSlug))
@@ -140,9 +176,30 @@ class CombatService
         return $relation ? (float)$relation->multiplier : 1.0;
     }
 
+    /**
+     * Chance de esquivar basada en Destreza total (base + equipo piernas).
+     * Curva suavizada, tope 45%.
+     */
     private function dodgeChance(float $destreza): float
     {
         return min(0.45, $destreza / ($destreza + 20));
+    }
+
+    /**
+     * Chance de doble golpe: mitad de la curva de esquive.
+     */
+    private function doubleHitChance(float $destreza): float
+    {
+        return min(0.30, ($destreza * 0.5) / ($destreza * 0.5 + 20));
+    }
+
+    /**
+     * Chance de crítico basada en Destreza.
+     * Más contenida que el esquive: tope 20%.
+     */
+    private function criticalChance(float $destreza): float
+    {
+        return min(0.20, $destreza / ($destreza + 50));
     }
 
     private function enemyName(string $elementSlug): string

@@ -28,16 +28,24 @@ class Talisman extends Model
         'air'    => '#7dd3fc', 'light'  => '#fbbf24', 'shadow' => '#7c3aed', 'anima'  => '#9ca3af',
     ];
 
-    // Multiplicadores elementales hardcodeados para no hacer N queries
-    // (la tabla element_relations es la fuente de verdad; esto es una copia de lectura rápida)
+    /**
+     * Multiplicadores para el cálculo de poder del Talismán (Fase 1).
+     *
+     * Ánima atacando a cualquiera (incluyendo Ánima): ×1.0
+     * Cualquier elemento no-Ánima atacando a Ánima: ×0.70
+     * Ánima vs Ánima: ×1.0 (cubierto por la fila 'anima')
+     *
+     * Nota: el ×0.70 para no-Ánima vs Ánima se aplica en la columna 'anima'
+     * de cada fila de elemento clásico.
+     */
     private const MULT = [
-        'fire'   => ['fire'=>1.0, 'water'=>0.6, 'earth'=>0.6, 'air'=>1.5, 'light'=>1.0, 'shadow'=>1.5, 'anima'=>0.80],
-        'water'  => ['fire'=>1.5, 'water'=>1.0, 'earth'=>1.0, 'air'=>0.6, 'light'=>1.5, 'shadow'=>0.6, 'anima'=>0.80],
-        'earth'  => ['fire'=>1.5, 'water'=>1.0, 'earth'=>1.0, 'air'=>0.6, 'light'=>1.5, 'shadow'=>0.6, 'anima'=>0.80],
-        'air'    => ['fire'=>0.6, 'water'=>1.5, 'earth'=>1.5, 'air'=>1.0, 'light'=>0.6, 'shadow'=>1.0, 'anima'=>0.80],
-        'light'  => ['fire'=>1.0, 'water'=>0.6, 'earth'=>0.6, 'air'=>1.5, 'light'=>1.0, 'shadow'=>1.5, 'anima'=>0.80],
-        'shadow' => ['fire'=>0.6, 'water'=>1.5, 'earth'=>1.5, 'air'=>1.0, 'light'=>0.6, 'shadow'=>1.0, 'anima'=>0.80],
-        'anima'  => ['fire'=>1.25,'water'=>1.25, 'earth'=>1.25,'air'=>1.25,'light'=>1.25,'shadow'=>1.25,'anima'=>1.0],
+        'fire'   => ['fire'=>1.0, 'water'=>0.6, 'earth'=>0.6, 'air'=>1.5, 'light'=>1.0, 'shadow'=>1.5, 'anima'=>0.70],
+        'water'  => ['fire'=>1.5, 'water'=>1.0, 'earth'=>1.0, 'air'=>0.6, 'light'=>1.5, 'shadow'=>0.6, 'anima'=>0.70],
+        'earth'  => ['fire'=>1.5, 'water'=>1.0, 'earth'=>1.0, 'air'=>0.6, 'light'=>1.5, 'shadow'=>0.6, 'anima'=>0.70],
+        'air'    => ['fire'=>0.6, 'water'=>1.5, 'earth'=>1.5, 'air'=>1.0, 'light'=>0.6, 'shadow'=>1.0, 'anima'=>0.70],
+        'light'  => ['fire'=>1.0, 'water'=>0.6, 'earth'=>0.6, 'air'=>1.5, 'light'=>1.0, 'shadow'=>1.5, 'anima'=>0.70],
+        'shadow' => ['fire'=>0.6, 'water'=>1.5, 'earth'=>1.5, 'air'=>1.0, 'light'=>0.6, 'shadow'=>1.0, 'anima'=>0.70],
+        'anima'  => ['fire'=>1.0, 'water'=>1.0, 'earth'=>1.0, 'air'=>1.0, 'light'=>1.0, 'shadow'=>1.0, 'anima'=>1.0],
     ];
 
     public function hero()
@@ -52,6 +60,10 @@ class Talisman extends Model
         return $this->{"esencia_{$slug}"} ?? 0;
     }
 
+    /**
+     * Agrega esencia respetando el tope MAX_ESENCIA.
+     * Devuelve la cantidad efectivamente agregada.
+     */
     public function addEsencia(string $slug, int $amount): int
     {
         $col     = "esencia_{$slug}";
@@ -66,22 +78,30 @@ class Talisman extends Model
         return $added;
     }
 
-    public function resetEsencia(string $slug): void
+    /**
+     * Resetea la esencia de un reino, respetando el piso si el anillo 1
+     * ya fue conquistado (sello obtenido).
+     *
+     * Si el héroe tiene el sello del anillo 1 de ese reino, la esencia
+     * no puede bajar de MAX_ESENCIA (100). Si no tiene sello, va a 0.
+     */
+    public function resetEsencia(string $slug, bool $tieneSellosAnillo1 = false): void
     {
-        $this->update(["esencia_{$slug}" => 0]);
+        $piso = $tieneSellosAnillo1 ? self::MAX_ESENCIA : 0;
+        $this->update(["esencia_{$slug}" => $piso]);
     }
 
     // ─── Esencia efectiva (DB + bonus de equipo, no persiste) ─────────────────
 
     /**
-     * Devuelve la esencia efectiva de cada elemento: farmeada + alignment_bonus del equipo.
+     * Devuelve la esencia efectiva de cada elemento: farmeada + alignment del equipo.
      * El Hero debe tener 'equippedItems.equipment.element' cargado.
      *
-     * @return array<string, int>  slug => esencia_efectiva
+     * @return array<string, int>
      */
     public function esenciasEfectivas(?Hero $hero = null): array
     {
-        $hero = $hero ?? $this->hero;  // fallback a la relación si no se pasa
+        $hero = $hero ?? $this->hero;
         $result = [];
 
         $equipBonus = [];
@@ -114,11 +134,7 @@ class Talisman extends Model
     }
 
     /**
-     * Calcula el poder del Talismán contra un elemento enemigo específico.
-     * Suma todas las esencias efectivas ponderadas por su multiplicador vs el enemigo.
-     *
-     * @param string $enemyElementSlug  slug del elemento del enemigo
-     * @return float
+     * Poder del Talismán contra un elemento enemigo específico.
      */
     public function poderContra(string $enemyElementSlug, ?Hero $hero = null): float
     {
@@ -134,12 +150,7 @@ class Talisman extends Model
     }
 
     /**
-     * Calcula la probabilidad de que el héroe golpee al enemigo en Fase 1.
-     * Fórmula: mi_poder / (mi_poder + poder_enemigo)
-     *
-     * @param float $poderEnemigo
-     * @param string $enemyElementSlug
-     * @return float  entre 0.0 y 1.0
+     * Probabilidad de que el héroe golpee al enemigo en Fase 1.
      */
     public function chanceDeGolpe(float $poderEnemigo, string $enemyElementSlug): float
     {

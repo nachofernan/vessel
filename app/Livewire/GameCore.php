@@ -38,12 +38,6 @@ class GameCore extends Component
         'anima'  => ['name' => 'Ánima',  'color' => '#9ca3af'],
     ];
 
-    /**
-     * Esencia farmeada mínima requerida para cada duración (anillo 1).
-     * Fórmula: (duracion - 10) * 2
-     * 10s → 0  ·  20s → 20  ·  30s → 40  ·  40s → 60  ·  50s → 80
-     * Guardián (60s) requiere 100 — se implementa por separado.
-     */
     public const DURACION_ESENCIA_MINIMA = [
         10 => 0,
         20 => 20,
@@ -96,22 +90,31 @@ class GameCore extends Component
         $this->phase  = 'hub';
     }
 
+    /**
+     * El Buscador parte solo con arma y escudo de Ánima.
+     * Narrativamente: un estudioso que no conoce aún el sistema elemental.
+     */
     private function giveStarterEquipment(Hero $hero): void
     {
-        foreach (['casco','pecho','brazos','piernas','escudo','arma','amuleto'] as $slot) {
-            $piece = Equipment::where('piece_type', $slot)->where('level', 1)->inRandomOrder()->first();
+        foreach (['arma', 'escudo'] as $slot) {
+            $piece = Equipment::where('piece_type', $slot)
+                ->where('level', 1)
+                ->whereHas('element', fn($q) => $q->where('slug', 'anima'))
+                ->first();
+
             if ($piece) {
                 HeroEquipment::create([
                     'hero_id'      => $hero->id,
                     'piece_type'   => $slot,
                     'equipment_id' => $piece->id,
-                    'carga'        => rand(5, 15),
+                    'carga'        => 10,
                 ]);
             }
-            if ($slot === 'pecho') {
-                $hero->recalcularHP();
-            }
         }
+
+        // Recalcular HP con el pecho vacío (solo resistencia base por ahora)
+        $hero->load('equippedItems.equipment.element');
+        $hero->recalcularHP();
     }
 
     // ─── Reiniciar ────────────────────────────────────────────────────────────
@@ -132,7 +135,6 @@ class GameCore extends Component
     {
         $this->hero = $this->loadHero($this->heroId);
 
-        // Validación en servidor: defensa en profundidad por si el blade es bypasseado
         if (!$this->duracionDesbloqueada($this->selectedDuration, $this->selectedKingdom)) {
             return;
         }
@@ -159,8 +161,28 @@ class GameCore extends Component
     }
 
     /**
-     * Seleccionar duración desde el blade. Solo acepta si está desbloqueada.
+     * Lanza la misión del guardián de anillo 1.
+     * Solo disponible si la esencia farmeada del reino es exactamente MAX_ESENCIA
+     * y el héroe no tiene ya el sello de ese reino.
      */
+    public function launchGuardian(string $kingdom): void
+    {
+        $this->hero = $this->loadHero($this->heroId);
+
+        $esencia = $this->hero->talisman->getEsencia($kingdom);
+        if ($esencia < Talisman::MAX_ESENCIA) return;
+        if ($this->hero->hasSeal($kingdom, 1)) return;
+
+        $service    = app(ExpeditionService::class);
+        $expedition = $service->launchGuardian($this->hero, $kingdom);
+
+        $this->selectedKingdom = $kingdom;
+        $this->expeditionId    = $expedition->id;
+        $this->secondsLeft     = 60;
+        $this->phase           = 'waiting';
+        $this->resultado       = null;
+    }
+
     public function selectDuration(int $duration): void
     {
         if ($this->duracionDesbloqueada($duration, $this->selectedKingdom)) {
@@ -168,9 +190,6 @@ class GameCore extends Component
         }
     }
 
-    /**
-     * Al cambiar de reino, ajustar la duración seleccionada si ya no está disponible.
-     */
     public function updatedSelectedKingdom(): void
     {
         $this->hero = $this->loadHero($this->heroId);
@@ -314,9 +333,6 @@ class GameCore extends Component
 
     // ─── Helpers de acceso por esencia ───────────────────────────────────────
 
-    /**
-     * True si la esencia farmeada del reino supera el mínimo requerido para esa duración.
-     */
     public function duracionDesbloqueada(int $duracion, string $kingdom): bool
     {
         $minima = self::DURACION_ESENCIA_MINIMA[$duracion] ?? 999;
@@ -324,9 +340,6 @@ class GameCore extends Component
         return $actual >= $minima;
     }
 
-    /**
-     * Duración máxima disponible para una cantidad de esencia dada.
-     */
     public function maxDuracionPermitida(int $esencia): int
     {
         $max = 10;
@@ -338,10 +351,6 @@ class GameCore extends Component
         return $max;
     }
 
-    /**
-     * Array de todas las duraciones con estado de acceso para el reino seleccionado.
-     * Usado en el blade para renderizar los botones con bloqueo visual.
-     */
     public function duracionesParaKingdom(string $kingdom): array
     {
         $esencia = $this->hero?->talisman->getEsencia($kingdom) ?? 0;
@@ -354,6 +363,17 @@ class GameCore extends Component
             ];
         }
         return $result;
+    }
+
+    /**
+     * True si el guardián está disponible para un reino:
+     * esencia farmeada == MAX y no tiene el sello todavía.
+     */
+    public function guardianDisponible(string $kingdom): bool
+    {
+        if (!$this->hero) return false;
+        $esencia = $this->hero->talisman->getEsencia($kingdom);
+        return $esencia >= Talisman::MAX_ESENCIA && !$this->hero->hasSeal($kingdom, 1);
     }
 
     // ─── Helpers internos ────────────────────────────────────────────────────
@@ -382,7 +402,12 @@ class GameCore extends Component
 
     private function loadHero(int $heroId): Hero
     {
-        return Hero::with(['talisman', 'equippedItems.equipment.element', 'inventory.equipment.element'])->find($heroId);
+        return Hero::with([
+            'talisman',
+            'equippedItems.equipment.element',
+            'inventory.equipment.element',
+            'seals',
+        ])->find($heroId);
     }
 
     public function render()

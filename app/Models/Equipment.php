@@ -19,15 +19,6 @@ class Equipment extends Model
         return $this->belongsTo(Element::class);
     }
 
-    // ── Qué stat modifica cada pieza ─────────────────────────────────────────
-    // Casco       → Inteligencia
-    // Pecho       → Resistencia
-    // Brazos      → Fuerza
-    // Piernas     → Destreza
-    // Escudo      → Defensa de combate (no stat base)
-    // Arma        → Ataque de combate (no stat base)
-    // Amuleto     → Suerte
-
     public static function statForPiece(string $pieceType): string
     {
         return match($pieceType) {
@@ -35,14 +26,13 @@ class Equipment extends Model
             'pecho'    => 'resistencia',
             'brazos'   => 'fuerza',
             'piernas'  => 'destreza',
-            'escudo'   => 'defensa',   // combate
-            'arma'     => 'ataque',    // combate
+            'escudo'   => 'defensa',
+            'arma'     => 'ataque',
             'amuleto'  => 'suerte',
             default    => 'fuerza',
         };
     }
 
-    // Etiqueta legible para la UI
     public static function labelForPiece(string $pieceType): string
     {
         return match($pieceType) {
@@ -58,16 +48,29 @@ class Equipment extends Model
     }
 
     /**
-     * Stat efectivo según carga de la instancia.
-     * +1 por cada 5 puntos de carga.
+     * Stat efectivo con progresión triangular.
+     * k puntos de bonus requieren k*(k+1)/2 de carga acumulada.
+     * Fórmula inversa: k = floor((-1 + sqrt(1 + 8*carga)) / 2)
+     *
+     * Ejemplos:
+     *   carga  10 → k=3  → stat_bonus + 3
+     *   carga  50 → k=9  → stat_bonus + 9
+     *   carga 100 → k=13 → stat_bonus + 13
+     *   carga 1000 → k=44
+     *   carga 10000 → k=140
      */
     public function statEfectivo(int $carga): int
     {
-        return $this->stat_bonus + (int)floor($carga / 5);
+        $k = (int)((-1 + sqrt(1 + 8 * $carga)) / 2);
+        return $this->stat_bonus + $k;
     }
 
+    /**
+     * Alignment efectivo — misma progresión triangular que stat.
+     */
     public function alignmentEfectivo(int $carga): int
     {
-        return $this->alignment_bonus + (int)floor($carga / 5);
+        $k = (int)((-1 + sqrt(1 + 8 * $carga)) / 2);
+        return $this->alignment_bonus + $k;
     }
 }

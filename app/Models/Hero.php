@@ -41,6 +41,32 @@ class Hero extends Model
         return $this->hasMany(Inventory::class)->with('equipment.element');
     }
 
+    public function seals(): HasMany
+    {
+        return $this->hasMany(Seal::class);
+    }
+
+    // ─── Helpers de sellos ────────────────────────────────────────────────────
+
+    /**
+     * True si el héroe tiene el sello de ese elemento en ese anillo.
+     */
+    public function hasSeal(string $elementSlug, int $ring = 1): bool
+    {
+        return $this->seals
+            ->where('element_slug', $elementSlug)
+            ->where('ring', $ring)
+            ->isNotEmpty();
+    }
+
+    /**
+     * Cantidad total de sellos obtenidos.
+     */
+    public function totalSeals(): int
+    {
+        return $this->seals->count();
+    }
+
     // ─── HP ───────────────────────────────────────────────────────────────────
 
     public static function calcularHP(int $resistencia, int $sellos = 0): int
@@ -59,17 +85,15 @@ class Hero extends Model
             }
         }
         $resistenciaEfectiva = $this->resistencia + $bonusResistencia;
-        $nuevoHP = self::calcularHP($resistenciaEfectiva);
-        $proporcion = $this->hp_maximo > 0 ? $this->hp_actual / $this->hp_maximo : 1;
-        $hpActual = max(1, (int)round($nuevoHP * $proporcion));
+        $sellos              = $this->seals()->count();
+        $nuevoHP             = self::calcularHP($resistenciaEfectiva, $sellos);
+        $proporcion          = $this->hp_maximo > 0 ? $this->hp_actual / $this->hp_maximo : 1;
+        $hpActual            = max(1, (int)round($nuevoHP * $proporcion));
         $this->update(['hp_maximo' => $nuevoHP, 'hp_actual' => $hpActual]);
     }
 
-    // ─── Stats de combate (stat base + bonus de equipo) ───────────────────────
+    // ─── Stats de combate ─────────────────────────────────────────────────────
 
-    /**
-     * Ataque de combate = Fuerza + bonus del arma equipada
-     */
     protected function ataque(): Attribute
     {
         return Attribute::make(
@@ -80,9 +104,6 @@ class Hero extends Model
         );
     }
 
-    /**
-     * Defensa de combate = Resistencia + bonus del escudo equipado
-     */
     protected function defensa(): Attribute
     {
         return Attribute::make(
@@ -93,20 +114,12 @@ class Hero extends Model
         );
     }
 
-    /**
-     * Elemento del arma equipada (para multiplicador ofensivo en combate).
-     * Devuelve slug o 'anima' si no hay arma.
-     */
     public function elementoArma(): string
     {
         $arma = $this->equippedItems->first(fn($e) => $e->piece_type === 'arma');
         return $arma?->equipment->element->slug ?? 'anima';
     }
 
-    /**
-     * Elemento del escudo equipado (para multiplicador defensivo en combate).
-     * Devuelve slug o 'anima' si no hay escudo.
-     */
     public function elementoEscudo(): string
     {
         $escudo = $this->equippedItems->first(fn($e) => $e->piece_type === 'escudo');
@@ -115,13 +128,6 @@ class Hero extends Model
 
     // ─── Alineación elemental del set ─────────────────────────────────────────
 
-    /**
-     * Calcula la alineación total del set (sin arma ni escudo, que operan distinto).
-     * Set pieces: casco, pecho, brazos, piernas, amuleto → 5 piezas.
-     * Bonus acumulativo del 20% por cada pieza adicional del mismo elemento.
-     *
-     * Devuelve [ 'slug' => alineación_efectiva, ... ]
-     */
     public function alineacionSet(): array
     {
         $setPieces = ['casco', 'pecho', 'brazos', 'piernas', 'amuleto', 'arma', 'escudo'];
@@ -146,11 +152,8 @@ class Hero extends Model
         return $result;
     }
 
-    // ─── Stats totales legibles para la UI ───────────────────────────────────
+    // ─── Stats totales para UI ────────────────────────────────────────────────
 
-    /**
-     * Devuelve un array con stats base + bonus de equipo para mostrar en pantalla.
-     */
     public function statSheet(): array
     {
         $bonuses = [

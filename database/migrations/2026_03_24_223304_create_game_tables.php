@@ -65,7 +65,7 @@ return new class extends Migration
             $table->foreignId('element_id')->constrained(); // elemento de la zona
             $table->unsignedInteger('duration_seconds');
             $table->enum('status', ['running', 'completed', 'finished'])->default('running');
-            $table->enum('event_type', ['combat', 'chest', 'merchant', 'silence', 'rest'])->nullable();
+            $table->enum('event_type', ['combat', 'chest', 'merchant', 'silence', 'rest', 'guardian'])->nullable();
             $table->json('resultado')->nullable(); // log completo
             $table->unsignedInteger('carga_obtenida')->default(0);
             $table->unsignedInteger('oro_obtenido')->default(0);
@@ -130,6 +130,18 @@ return new class extends Migration
             $table->timestamp('generated_at');
             $table->timestamps();
         });
+
+        Schema::create('seals', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('hero_id')->constrained()->cascadeOnDelete();
+            $table->string('element_slug'); // fire, water, earth, air, light, shadow, anima
+            $table->unsignedTinyInteger('ring')->default(1); // 1, 2, 3
+            $table->timestamp('obtained_at')->useCurrent();
+            $table->timestamps();
+ 
+            // Un sello por elemento por anillo por héroe
+            $table->unique(['hero_id', 'element_slug', 'ring']);
+        });
     }
 
     /**
@@ -148,6 +160,7 @@ return new class extends Migration
         Schema::dropIfExists('hero_equipment');
         Schema::dropIfExists('equipments');
         Schema::dropIfExists('market_stocks');
+        Schema::dropIfExists('seals');
         Schema::enableForeignKeyConstraints();
     }
 };
