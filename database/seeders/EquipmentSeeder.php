@@ -50,7 +50,7 @@ class EquipmentSeeder extends Seeder
                     'element_id'      => $element->id,
                     'level'           => 1,
                     'name'            => "{$prefix} {$adj}",
-                    'stat_bonus'      => 2,
+                    'stat_bonus'      => 0,
                     'alignment_bonus' => 10,
                     'carga_maxima'    => 100,
                     'valor_base'      => 100,
