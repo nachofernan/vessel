@@ -52,6 +52,12 @@ class GameCore extends Component
     {
         $heroId = session('hero_id');
 
+        // Si no hay sesión, buscar héroes de esta IP
+        if (!$heroId) {
+            $this->phase = 'select';
+            return;
+        }
+
         if ($heroId && $hero = $this->loadHero($heroId)) {
             $this->heroId = $hero->id;
             $this->hero   = $hero;
@@ -68,14 +74,47 @@ class GameCore extends Component
         }
     }
 
+    public function heroesDeEstaIp(): \Illuminate\Support\Collection
+    {
+        return Hero::where('ip_address', request()->ip())
+            ->orderByDesc('updated_at')
+            ->get();
+    }
+
+    public function selectHero(int $heroId): void
+    {
+        $hero = Hero::where('id', $heroId)
+            ->where('ip_address', request()->ip())
+            ->first();
+
+        if (!$hero) return;
+
+        session(['hero_id' => $hero->id]);
+        $this->heroId = $hero->id;
+        $this->hero   = $this->loadHero($hero->id);
+        $this->phase  = 'hub';
+    }
+
+    public function logout(): void
+    {
+        session()->forget('hero_id');
+        $this->heroId       = null;
+        $this->hero         = null;
+        $this->expeditionId = null;
+        $this->resultado    = null;
+        $this->secondsLeft  = 0;
+        $this->phase        = 'select';
+    }
+
     // ─── Crear héroe ──────────────────────────────────────────────────────────
 
     public function createHero(): void
     {
         $hero = Hero::create([
             'name'         => $this->heroName ?: 'El Buscador',
-            'fuerza'       => 5, 'resistencia' => 5, 'destreza'    => 5,
-            'inteligencia' => 5, 'suerte'       => 5, 'oro'         => 50,
+            'ip_address'   => request()->ip(),
+            'fuerza'       => rand(3, 7), 'resistencia' => rand(3, 7), 'destreza'    => rand(3, 7),
+            'inteligencia' => rand(3, 7), 'suerte'       => rand(3, 7), 'oro'         => 50,
         ]);
 
         $hp = Hero::calcularHP($hero->resistencia);
@@ -393,9 +432,12 @@ class GameCore extends Component
 
     private function buildMarketStock(): array
     {
-        $purchased = session('market_purchased', []);
+        $purchased  = session('market_purchased', []);
+        $precio     = app(MarketService::class)->precioParaHeroe($this->hero);
+
         return collect(app(MarketService::class)->getStock())
             ->reject(fn($item) => in_array($item['equipment_id'], $purchased))
+            ->map(fn($item) => array_merge($item, ['precio' => $precio]))
             ->values()
             ->all();
     }

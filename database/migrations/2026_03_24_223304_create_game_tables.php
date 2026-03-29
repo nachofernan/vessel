@@ -38,6 +38,7 @@ return new class extends Migration
             $table->unsignedInteger('hp_actual')->default(0); // calculado al crear
             $table->unsignedInteger('hp_maximo')->default(0);
             $table->unsignedInteger('oro')->default(0);
+            $table->string('ip_address')->nullable()->index();
             $table->timestamps();
         });
 

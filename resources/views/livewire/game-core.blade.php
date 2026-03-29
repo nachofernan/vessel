@@ -1,7 +1,35 @@
 <div class="p-6 max-w-2xl mx-auto font-mono text-sm">
 
     {{-- ═══════════════════════════════════════════════════════ CREAR HÉROE ══ --}}
-    @if($phase === 'create')
+    @if($phase === 'select')
+        @php $heroes = $this->heroesDeEstaIp(); @endphp
+        <h1 class="text-xl font-bold mb-4">The Vessel — Farlock's Codex</h1>
+
+        @if($heroes->isEmpty())
+            {{-- No hay héroes, ir directo a crear --}}
+            @php $this->phase = 'create' @endphp
+        @else
+            <p class="text-gray-500 mb-4">Buscadores registrados en este terminal:</p>
+            <div class="space-y-2 mb-6">
+                @foreach($heroes as $h)
+                    <div class="flex items-center justify-between border border-gray-200 px-3 py-2">
+                        <div class="text-sm">
+                            <span class="font-bold">{{ $h->name }}</span>
+                            <span class="text-gray-400 ml-2">HP {{ $h->hp_actual }}/{{ $h->hp_maximo }} · Oro {{ $h->oro }}</span>
+                        </div>
+                        <button wire:click="selectHero({{ $h->id }})"
+                                class="text-xs bg-black text-white px-2 py-1 hover:bg-gray-700">
+                            Continuar
+                        </button>
+                    </div>
+                @endforeach
+            </div>
+            <button wire:click="$set('phase', 'create')"
+                    class="text-xs border border-gray-400 px-3 py-2 hover:bg-gray-100">
+                Crear nuevo Buscador
+            </button>
+        @endif
+    @elseif($phase === 'create')
         <h1 class="text-xl font-bold mb-4">The Vessel — Farlock's Codex</h1>
         <p class="mb-2 text-gray-500">Un estudioso encontró el Códice. El Talismán lo eligió.</p>
         <input wire:model="heroName" placeholder="Nombre del Buscador (opcional)"
@@ -28,6 +56,10 @@
                 <button wire:click="goToInventory"
                         class="text-xs border border-gray-400 px-2 py-1 hover:bg-gray-100">
                     Equipamiento
+                </button>
+                <button wire:click="logout"
+                        class="text-xs text-gray-500 border border-gray-300 px-2 py-1 hover:bg-gray-50">
+                    Salir
                 </button>
                 <button wire:click="resetGame"
                         wire:confirm="¿Reiniciar partida? El héroe y todos sus datos se eliminarán."

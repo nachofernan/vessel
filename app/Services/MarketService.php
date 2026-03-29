@@ -36,7 +36,9 @@ class MarketService
      */
     public function buy(Hero $hero, int $equipmentId, int $carga): array
     {
-        if ($hero->oro < self::PRECIO_NIVEL_1) {
+        $precio = $this->precioConInteligencia($hero);
+        
+        if ($hero->oro < $precio) {
             return ['ok' => false, 'message' => 'Oro insuficiente.'];
         }
 
@@ -46,7 +48,7 @@ class MarketService
         }
 
         // Descontar oro y marcar como comprado
-        $hero->decrement('oro', self::PRECIO_NIVEL_1);
+        $hero->decrement('oro', $precio);
         $purchased = session('market_purchased', []);
         $purchased[] = $equipmentId;
         session(['market_purchased' => $purchased]);
@@ -74,7 +76,7 @@ class MarketService
         }
 
         Inventory::create(['hero_id' => $hero->id, 'equipment_id' => $equipmentId, 'carga' => $carga]);
-        return ['ok' => true, 'message' => "Ítem agregado al inventario."];
+        return ['ok' => true, 'message' => "Ítem agregado al inventario. (Pagado: {$precio} oro)"];
     }
 
     // ─── Privados ────────────────────────────────────────────────────────────
@@ -108,5 +110,23 @@ class MarketService
             'items'        => $items,
             'generated_at' => now(),
         ]);
+    }
+
+    private function precioConInteligencia(Hero $hero): int
+    {
+        $inteligencia = $hero->inteligencia;
+        foreach ($hero->equippedItems as $slot) {
+            if ($slot->piece_type === 'casco') {
+                $inteligencia += $slot->statEfectivo();
+            }
+        }
+        // Descuento máximo 40% con INT muy alta, curva suavizada
+        $descuento = min(0.40, $inteligencia / ($inteligencia + 30));
+        return max(10, (int)round(self::PRECIO_NIVEL_1 * (1 - $descuento)));
+    }
+
+    public function precioParaHeroe(Hero $hero): int
+    {
+        return $this->precioConInteligencia($hero);
     }
 }
