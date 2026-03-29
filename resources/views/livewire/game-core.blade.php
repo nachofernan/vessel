@@ -4,12 +4,12 @@
     @if($phase === 'select')
         @php $heroes = $this->heroesDeEstaIp(); @endphp
         <h1 class="text-xl font-bold mb-4">The Vessel — Farlock's Codex</h1>
-        <p class="text-gray-500 mb-4">Buscadores registrados en este terminal:</p>
+        <p class="text-gray-500 mb-4">Buscadores registrados en esta ip: {{ request()->ip() }}</p>
         <div class="space-y-2 mb-6">
             @foreach($heroes as $h)
                 <div class="flex items-center justify-between border border-gray-200 px-3 py-2">
                     <div class="text-sm">
-                        <span class="font-bold">{{ $h->name }}</span>
+                        <span class="font-bold">{{ $h->name }} (ip -> {{ $h->ip_address }})</span>
                         <span class="text-gray-400 ml-2">HP {{ $h->hp_actual }}/{{ $h->hp_maximo }} · Oro {{ $h->oro }}</span>
                     </div>
                     <button wire:click="selectHero({{ $h->id }})"
