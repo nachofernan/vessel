@@ -429,7 +429,7 @@ class ExpeditionService
                 'element_color'            => $eq->element->color,
                 'carga'                    => $carga,
                 'carga_maxima'             => $eq->carga_maxima,
-                'precio'                   => MarketService::PRECIO_NIVEL_1,
+                'precio'                   => MarketService::precioParaHeroe($hero, $carga),
                 'stat_bonus_efectivo'      => $eq->statEfectivo($carga),
                 'alignment_bonus_efectivo' => $eq->alignmentEfectivo($carga),
             ];
