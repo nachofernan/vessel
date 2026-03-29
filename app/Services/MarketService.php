@@ -36,7 +36,7 @@ class MarketService
      */
     public function buy(Hero $hero, int $equipmentId, int $carga): array
     {
-        $precio = $this->precioConInteligencia($hero);
+        $precio = $this->precioParaHeroe($hero, $carga);
         
         if ($hero->oro < $precio) {
             return ['ok' => false, 'message' => 'Oro insuficiente.'];
@@ -97,7 +97,7 @@ class MarketService
                 'element_color'             => $eq->element->color,
                 'carga'                     => $carga,
                 'carga_maxima'              => $eq->carga_maxima,
-                'precio'                    => self::PRECIO_NIVEL_1,
+                'precio'                    => $this->valorSegunCarga($carga), // precio base sin descuento de INT
                 'stat_bonus_efectivo'       => $eq->stat_bonus + (int)floor($carga / 5),
                 'alignment_bonus_efectivo'  => $eq->alignment_bonus + (int)floor($carga / 5),
             ];
@@ -112,7 +112,13 @@ class MarketService
         ]);
     }
 
-    private function precioConInteligencia(Hero $hero): int
+    private function valorSegunCarga(int $carga): int
+    {
+        if ($carga <= 0) return 1;
+        return max(1, (int)round(20 * pow($carga, 0.674)));
+    }
+
+    public function precioParaHeroe(Hero $hero, int $carga): int
     {
         $inteligencia = $hero->inteligencia;
         foreach ($hero->equippedItems as $slot) {
@@ -120,13 +126,7 @@ class MarketService
                 $inteligencia += $slot->statEfectivo();
             }
         }
-        // Descuento máximo 40% con INT muy alta, curva suavizada
         $descuento = min(0.40, $inteligencia / ($inteligencia + 30));
-        return max(10, (int)round(self::PRECIO_NIVEL_1 * (1 - $descuento)));
-    }
-
-    public function precioParaHeroe(Hero $hero): int
-    {
-        return $this->precioConInteligencia($hero);
+        return max(1, (int)round($this->valorSegunCarga($carga) * (1 - $descuento)));
     }
 }

@@ -55,11 +55,11 @@
                         class="text-xs text-gray-500 border border-gray-300 px-2 py-1 hover:bg-gray-50">
                     Salir
                 </button>
-                <button wire:click="resetGame"
+                <!-- <button wire:click="resetGame"
                         wire:confirm="¿Reiniciar partida? El héroe y todos sus datos se eliminarán."
                         class="text-xs text-red-500 border border-red-300 px-2 py-1 hover:bg-red-50">
                     Reiniciar
-                </button>
+                </button> -->
             </div>
         </div>
 

@@ -433,12 +433,14 @@ class GameCore extends Component
 
     private function buildMarketStock(): array
     {
-        $purchased  = session('market_purchased', []);
-        $precio     = app(MarketService::class)->precioParaHeroe($this->hero);
+        $purchased = session('market_purchased', []);
+        $service   = app(MarketService::class);
 
-        return collect(app(MarketService::class)->getStock())
+        return collect($service->getStock())
             ->reject(fn($item) => in_array($item['equipment_id'], $purchased))
-            ->map(fn($item) => array_merge($item, ['precio' => $precio]))
+            ->map(fn($item) => array_merge($item, [
+                'precio' => $service->precioParaHeroe($this->hero, $item['carga'])
+            ]))
             ->values()
             ->all();
     }
