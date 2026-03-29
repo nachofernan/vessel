@@ -76,9 +76,10 @@ class GameCore extends Component
 
     public function heroesDeEstaIp(): \Illuminate\Support\Collection
     {
-        return Hero::where('ip_address', request()->ip())
+        return Hero::all();
+        /* return Hero::where('ip_address', request()->ip())
             ->orderByDesc('updated_at')
-            ->get();
+            ->get(); */
     }
 
     public function selectHero(int $heroId): void
