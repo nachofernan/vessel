@@ -17,6 +17,15 @@ class GameCore extends Component
     public string $heroName  = '';
     public ?int   $heroId    = null;
 
+    public array $statsCreacion = [
+        'fuerza' => 5, 'resistencia' => 5, 'destreza' => 5,
+        'inteligencia' => 5, 'suerte' => 5,
+    ];
+
+    private const STAT_PUNTOS_TOTAL = 25;
+    private const STAT_MIN = 1;
+    private const STAT_MAX = 10;
+
     public ?int    $expeditionId = null;
     public ?array  $resultado    = null;
     public string  $phase        = 'create';
@@ -109,13 +118,32 @@ class GameCore extends Component
 
     // ─── Crear héroe ──────────────────────────────────────────────────────────
 
+    public function subirStat(string $stat): void
+    {
+        if (!array_key_exists($stat, $this->statsCreacion)) return;
+        if ($this->statsCreacion[$stat] >= self::STAT_MAX) return;
+        if (array_sum($this->statsCreacion) >= self::STAT_PUNTOS_TOTAL) return;
+        $this->statsCreacion[$stat]++;
+    }
+
+    public function bajarStat(string $stat): void
+    {
+        if (!array_key_exists($stat, $this->statsCreacion)) return;
+        if ($this->statsCreacion[$stat] <= self::STAT_MIN) return;
+        $this->statsCreacion[$stat]--;
+    }
+
     public function createHero(): void
     {
         $hero = Hero::create([
             'name'         => $this->heroName ?: 'El Buscador',
             'ip_address'   => request()->ip(),
-            'fuerza'       => rand(3, 7), 'resistencia' => rand(3, 7), 'destreza'    => rand(3, 7),
-            'inteligencia' => rand(3, 7), 'suerte'       => rand(3, 7), 'oro'         => 50,
+            'fuerza'       => $this->statsCreacion['fuerza'],
+            'resistencia'  => $this->statsCreacion['resistencia'],
+            'destreza'     => $this->statsCreacion['destreza'],
+            'inteligencia' => $this->statsCreacion['inteligencia'],
+            'suerte'       => $this->statsCreacion['suerte'],
+            'oro'          => 50,
         ]);
 
         $hp = Hero::calcularHP($hero->resistencia);
