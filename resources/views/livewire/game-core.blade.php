@@ -4,7 +4,7 @@
     @if($phase === 'select')
         @php $heroes = $this->heroesDeEstaIp(); @endphp
         <h1 class="text-xl font-bold mb-4">The Vessel — Farlock's Codex</h1>
-
+        {{ dd($heroes) }}
         @if($heroes->isEmpty())
             {{-- No hay héroes, ir directo a crear --}}
             @php $this->phase = 'create' @endphp
