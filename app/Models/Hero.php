@@ -11,7 +11,7 @@ class Hero extends Model
 {
     protected $fillable = [
         'name','fuerza','resistencia','destreza','inteligencia','suerte',
-        'hp_actual','hp_maximo','oro'
+        'hp_actual','hp_maximo','oro', 'ip_address'
     ];
 
     // ─── Relaciones ───────────────────────────────────────────────────────────
