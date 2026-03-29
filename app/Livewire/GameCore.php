@@ -336,6 +336,52 @@ class GameCore extends Component
         $this->hero = $this->loadHero($this->heroId);
     }
 
+    public function equiparSetup(string $elementSlug): void
+    {
+        $this->hero = $this->loadHero($this->heroId);
+        $slots      = ['casco','pecho','brazos','piernas','escudo','arma','amuleto'];
+
+        foreach ($slots as $slot) {
+            // Buscar en inventario una pieza de ese elemento para este slot
+            $candidata = $this->hero->inventory
+                ->first(fn($i) =>
+                    $i->equipment->piece_type === $slot &&
+                    $i->equipment->element->slug === $elementSlug
+                );
+
+            if (!$candidata) continue;
+
+            // Desequipar lo que hay en el slot (va al inventario)
+            $actual = \App\Models\HeroEquipment::where('hero_id', $this->heroId)
+                ->where('piece_type', $slot)
+                ->first();
+
+            if ($actual) {
+                // Si ya es del mismo elemento y mismo item, ignorar
+                if ($actual->equipment_id === $candidata->equipment_id) {
+                    $candidata->delete();
+                    continue;
+                }
+                $this->addToInventory($this->heroId, $actual->equipment_id, $actual->carga);
+                $actual->delete();
+            }
+
+            // Equipar la candidata
+            \App\Models\HeroEquipment::create([
+                'hero_id'      => $this->heroId,
+                'piece_type'   => $slot,
+                'equipment_id' => $candidata->equipment_id,
+                'carga'        => $candidata->carga,
+            ]);
+
+            $candidata->delete();
+        }
+
+        $this->hero = $this->loadHero($this->heroId);
+        $this->hero->recalcularHP();
+        $this->hero = $this->loadHero($this->heroId);
+    }
+
     // ─── Mercado ─────────────────────────────────────────────────────────────
 
     public function goToMarket(): void

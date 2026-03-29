@@ -178,8 +178,8 @@ class Talisman extends Model
         return array_sum($this->todasLasEsencias());
     }
 
-    public function poderTotal(): int
+    public function poderTotal(?Hero $hero = null): int
     {
-        return array_sum($this->esenciasEfectivas());
+        return (int)round(array_sum($this->esenciasEfectivas($hero)));
     }
 }

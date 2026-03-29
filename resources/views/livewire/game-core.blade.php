@@ -136,11 +136,14 @@
         @php
             $esenciasEfectivas = $hero->talisman->esenciasEfectivas($hero);
             $esenciasFarmeadas = $hero->talisman->todasLasEsencias();
-            $max = \App\Models\Talisman::MAX_ESENCIA;
-            $poderTotal = $hero->talisman->poderTotal();
+            $max        = \App\Models\Talisman::MAX_ESENCIA;
+            $poderBase  = array_sum(array_map(fn($v) => (int)$v, $esenciasFarmeadas));
+            $poderTotal = $hero->talisman->poderTotal($hero); // con equipo
         @endphp
         <div class="mb-5 p-3 border border-gray-200 bg-gray-50">
-            <p class="text-xs text-gray-400 uppercase tracking-wide mb-2">Talismán — Esencias (Poder Total: {{ $poderTotal }})</p>
+            <p class="text-xs text-gray-400 uppercase tracking-wide mb-2">
+                Talismán — Esencias (Poder: {{ $poderBase }} / {{ $poderTotal }})
+            </p>
             <div class="space-y-1 mb-3">
                 @foreach($esenciasFarmeadas as $slug => $valorFarmeado)
                     @php
@@ -153,9 +156,8 @@
                     @endphp
                     <div class="flex items-center gap-2">
                         <span class="w-12 text-xs" style="color:{{ $color }}">{{ $nombres[$slug] }}</span>
-                        <div class="flex-1 bg-gray-200 h-2 rounded overflow-hidden flex">
-                            <div class="h-2" style="width:{{ $barBase }}%; background:{{ $color }}"></div>
-                            <div class="h-2" style="width:{{ $barBonus }}%; background:{{ $color }}; opacity:0.35"></div>
+                        <div class="flex-1 bg-gray-200 h-2 rounded overflow-hidden">
+                            <div class="h-2 rounded" style="width:{{ $barBase }}%; background:{{ $color }}"></div>
                         </div>
                         <span class="text-xs text-gray-500 w-24 text-right">
                             @if($tieneSello)
@@ -371,6 +373,33 @@
                 @endforeach
             </div>
         </div>
+
+        @php
+            $elementosEnInventario = $hero->inventory
+                ->map(fn($i) => $i->equipment->element->slug)
+                ->unique()
+                ->values();
+        @endphp
+
+        @if($elementosEnInventario->isNotEmpty())
+            <div class="mb-4 p-3 bg-gray-50 border border-gray-200">
+                <p class="text-xs text-gray-400 uppercase tracking-wide mb-2">Equipar setup completo</p>
+                <div class="flex flex-wrap gap-2">
+                    @foreach($elementosEnInventario as $slug)
+                        <button wire:click="equiparSetup('{{ $slug }}')"
+                                class="text-xs px-3 py-1 border rounded hover:opacity-80"
+                                style="border-color:{{ $colores[$slug] }};
+                                    color:{{ $colores[$slug] }};
+                                    background:{{ $colores[$slug] }}11">
+                            Setup {{ $nombres[$slug] }}
+                        </button>
+                    @endforeach
+                </div>
+                <p class="text-xs text-gray-300 mt-2">
+                    Equipa todas las piezas disponibles de ese elemento. Lo que tengas puesto pasa al inventario.
+                </p>
+            </div>
+        @endif
 
         @foreach($slots as $slot)
             @php
