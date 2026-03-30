@@ -672,24 +672,24 @@
         @else
             {{-- Combate normal o Guardián --}}
             @php
-                $kingdom     = $resultado['kingdom'] ?? $selectedKingdom;
-                $kColor      = $colores[$kingdom] ?? '#9ca3af';
-                $heroWon     = $resultado['hero_won'];
-                $enemy       = $resultado['enemy'];
-                $hpLeft      = $resultado['hero_hp_left'];
-                $hpMax       = $hero->hp_maximo;
-                $hpPct       = $hpMax > 0 ? round(($hpLeft / $hpMax) * 100) : 0;
-                $hpColor     = $hpPct > 55 ? 'text-green-600' : ($hpPct > 25 ? 'text-yellow-600' : 'text-red-500');
-                $chanceH     = $resultado['chance_heroe_golpea'] ?? '—';
-                $chanceE     = $resultado['chance_enemigo_golpea'] ?? '—';
-                $isGuardian  = $resultado['is_guardian'] ?? false;
-                $selloObt    = $resultado['sello_obtenido'] ?? false;
+                $kingdom    = $resultado['kingdom'] ?? $selectedKingdom;
+                $kColor     = $colores[$kingdom] ?? '#9ca3af';
+                $outcome    = $resultado['outcome'] ?? ($resultado['hero_won'] ? 'victory' : 'defeat');
+                $isGuardian = $resultado['is_guardian'] ?? false;
+                $selloObt   = $resultado['sello_obtenido'] ?? false;
+                $enemy      = $resultado['enemy'];
+                $hpLeft     = $resultado['hero_hp_left'];
+                $hpMax      = $hero->hp_maximo;
+                $hpPct      = $hpMax > 0 ? round(($hpLeft / $hpMax) * 100) : 0;
+                $hpColor    = $hpPct > 55 ? 'text-green-600' : ($hpPct > 25 ? 'text-yellow-600' : 'text-red-500');
+                $chanceH    = $resultado['chance_heroe_golpea'] ?? '—';
+                $chanceE    = $resultado['chance_enemigo_golpea'] ?? '—';
             @endphp
 
-            {{-- Encabezado --}}
-            @if($isGuardian && $heroWon)
+            {{-- ── Encabezado según outcome ── --}}
+            @if($isGuardian && $outcome === 'victory')
                 <div class="mb-3 p-3 border-2 rounded text-center"
-                     style="border-color:{{ $kColor }}; background:{{ $kColor }}11">
+                    style="border-color:{{ $kColor }}; background:{{ $kColor }}11">
                     <p class="font-bold text-base" style="color:{{ $kColor }}">
                         ✦ Guardián derrotado — {{ $nombres[$kingdom] ?? $kingdom }}
                     </p>
@@ -698,19 +698,39 @@
                         La esencia del reino no puede caer de 100.
                     </p>
                 </div>
-            @elseif($isGuardian && !$heroWon)
+            @elseif($isGuardian && $outcome === 'defeat')
                 <p class="font-bold mb-3 text-base text-red-600">
                     Derrota — el Guardián de {{ $nombres[$kingdom] ?? $kingdom }} resiste.
                 </p>
-            @else
-                <p class="font-bold mb-3 text-base" style="color:{{ $heroWon ? $kColor : '#dc2626' }}">
-                    {{ $heroWon
-                        ? 'Victoria — ' . ($nombres[$kingdom] ?? $kingdom)
-                        : 'Derrota — '  . ($nombres[$kingdom] ?? $kingdom) }}
+            @elseif($isGuardian && $outcome === 'draw')
+                <div class="mb-3 p-3 border border-gray-400 rounded bg-gray-50 text-center">
+                    <p class="font-bold text-base text-gray-600">
+                        Empate — el Guardián de {{ $nombres[$kingdom] ?? $kingdom }} no cae.
+                    </p>
+                    <p class="text-xs text-gray-400 mt-1">
+                        Ninguno ganó. Volvés sin sello, pero conservás tu esencia.
+                    </p>
+                </div>
+            @elseif($outcome === 'victory')
+                <p class="font-bold mb-3 text-base" style="color:{{ $kColor }}">
+                    Victoria — {{ $nombres[$kingdom] ?? $kingdom }}
                 </p>
+            @elseif($outcome === 'defeat')
+                <p class="font-bold mb-3 text-base text-red-600">
+                    Derrota — {{ $nombres[$kingdom] ?? $kingdom }}
+                </p>
+            @else {{-- draw --}}
+                <div class="mb-3 p-3 border border-gray-300 rounded bg-gray-50">
+                    <p class="font-bold text-base text-gray-600">
+                        Empate — {{ $nombres[$kingdom] ?? $kingdom }}
+                    </p>
+                    <p class="text-xs text-gray-400 mt-1">
+                        El combate terminó sin ganador. No hay recompensas ni penalización.
+                    </p>
+                </div>
             @endif
 
-            {{-- Combatientes --}}
+            {{-- ── Combatientes ── --}}
             <div class="grid grid-cols-2 gap-3 mb-4 text-xs">
                 <div class="border border-gray-200 p-2 bg-gray-50">
                     <p class="font-bold mb-1">{{ $hero->name }}</p>
@@ -726,15 +746,19 @@
                         {{ $enemy['name'] }}
                         @if($isGuardian) <span class="text-xs">(Guardián)</span> @endif
                     </p>
-                    <p>HP: <span class="font-bold {{ $heroWon ? 'text-gray-400' : 'text-red-600' }}">
-                        {{ $heroWon ? '0' : '?' }}/{{ $enemy['hp'] }}</span></p>
+                    <p>HP:
+                        <span class="font-bold
+                            {{ $outcome === 'victory' ? 'text-gray-400' : ($outcome === 'draw' ? 'text-yellow-600' : 'text-green-600') }}">
+                            {{ $outcome === 'victory' ? '0' : '?' }}/{{ $enemy['hp'] }}
+                        </span>
+                    </p>
                     <p>Ataque: {{ $enemy['ataque'] }} · Defensa: {{ $enemy['defensa'] }}</p>
                     <p>Poder: <strong>{{ round($enemy['poder']) }}</strong></p>
                     <p>Chance de golpear: <strong>{{ $chanceE }}%</strong></p>
                 </div>
             </div>
 
-            {{-- Métricas --}}
+            {{-- ── Métricas ── --}}
             <div class="grid grid-cols-4 gap-2 mb-4 text-xs text-center">
                 <div class="border border-gray-200 p-2">
                     <div class="text-gray-400">Rondas</div>
@@ -742,13 +766,25 @@
                 </div>
                 <div class="border border-gray-200 p-2">
                     <div class="text-gray-400">Oro</div>
-                    <div class="font-bold text-base">+{{ $resultado['oro_ganado'] }}</div>
+                    <div class="font-bold text-base">
+                        {{ $outcome === 'victory' ? '+' . $resultado['oro_ganado'] : '—' }}
+                    </div>
                 </div>
                 <div class="border border-gray-200 p-2">
-                    <div class="text-gray-400">{{ $heroWon ? 'Esencia +' : 'Esencia −' }}</div>
-                    <div class="font-bold text-base {{ $heroWon ? 'text-green-600' : 'text-red-500' }}">
-                        {{ $heroWon ? '+' . $resultado['esencia_ganada'] : '-' . $resultado['esencia_perdida'] }}
-                    </div>
+                    @if($outcome === 'victory')
+                        <div class="text-gray-400">Esencia +</div>
+                        <div class="font-bold text-base text-green-600">
+                            +{{ $resultado['esencia_ganada'] }}
+                        </div>
+                    @elseif($outcome === 'defeat')
+                        <div class="text-gray-400">Esencia −</div>
+                        <div class="font-bold text-base text-red-500">
+                            −{{ $resultado['esencia_perdida'] }}
+                        </div>
+                    @else
+                        <div class="text-gray-400">Esencia</div>
+                        <div class="font-bold text-base text-gray-400">sin cambio</div>
+                    @endif
                     <div style="color:{{ $kColor }}">{{ $nombres[$kingdom] ?? $kingdom }}</div>
                 </div>
                 <div class="border border-gray-200 p-2">
@@ -757,10 +793,9 @@
                 </div>
             </div>
 
-            {{-- Loot (solo combates normales) --}}
-            @if(!$isGuardian && ($resultado['loot_item_name'] ?? null))
+            {{-- ── Loot (solo victorias en combate normal) ── --}}
+            @if(!$isGuardian && $outcome === 'victory' && ($resultado['loot_item_name'] ?? null))
                 @php
-                    $lootSlug     = $resultado['loot_item_slug'];
                     $lootFusion   = $resultado['loot_fusion'] ?? false;
                     $cargaAntes   = $resultado['loot_carga_antes'] ?? 0;
                     $cargaDrop    = $resultado['loot_carga_drop'] ?? 0;
@@ -771,7 +806,9 @@
                     <p>+ {{ $lootFusion ? 'Fusión' : 'Loot' }}:
                         <strong>{{ $resultado['loot_item_name'] }}</strong>
                         @if($lootFusion)
-                            <span class="text-blue-500">carga: {{ $cargaDespues }}/{{ $cargaMax }} ({{ $cargaAntes }}+{{ $cargaDrop }})</span>
+                            <span class="text-blue-500">
+                                carga: {{ $cargaDespues }}/{{ $cargaMax }} ({{ $cargaAntes }}+{{ $cargaDrop }})
+                            </span>
                         @else
                             <span class="text-gray-400">carga: {{ $cargaDrop }}/{{ $cargaMax }}</span>
                         @endif
@@ -779,14 +816,14 @@
                 </div>
             @endif
 
-            {{-- Log de rondas --}}
+            {{-- ── Log de rondas ── --}}
             <div class="bg-gray-100 p-3 mb-4 space-y-1 max-h-48 overflow-y-auto text-xs">
                 @foreach($resultado['logs'] as $log)
                     <p>{{ $log['narrative_line'] }}</p>
                 @endforeach
             </div>
 
-            {{-- Talismán post-combate --}}
+            {{-- ── Talismán post-combate ── --}}
             <div class="mb-4 space-y-1">
                 @foreach($esencias as $slug => $valor)
                     <div class="flex items-center gap-2">
@@ -806,7 +843,8 @@
                 @endforeach
             </div>
 
-            @if(!$heroWon)
+            {{-- ── Botones post-combate ── --}}
+            @if($outcome === 'defeat')
                 <div class="flex gap-2 mb-3">
                     <button wire:click="launchRest"
                             class="bg-gray-700 text-white px-4 py-2 text-sm">

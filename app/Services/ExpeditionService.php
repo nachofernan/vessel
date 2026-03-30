@@ -141,57 +141,69 @@ class ExpeditionService
         $hero    = Hero::with(['equippedItems.equipment.element', 'talisman', 'seals'])->find($expedition->hero_id);
         $kingdom = $expedition->kingdom_slug;
         $ring    = 1;
-
+    
         $enemy  = $this->combat->buildEnemy($kingdom, $ring, $expedition->duration_seconds);
         $result = $this->combat->resolve($hero, $enemy);
-
-        $heroDied = !$result['hero_won'];
-        $oro      = $heroDied ? 0 : mt_rand(
-            (int)(0.5 * $expedition->duration_seconds),
-            (int)(3   * $expedition->duration_seconds)
-        );
-
-        $talisman      = $hero->talisman;
-        $esenciaGanada = 0;
+    
+        $outcome  = $result['outcome']; // 'victory' | 'defeat' | 'draw'
+        $talisman = $hero->talisman;
+    
+        $oro            = 0;
+        $esenciaGanada  = 0;
         $esenciaPerdida = 0;
-
-        if ($heroDied) {
-            $esenciaPerdida     = $talisman->getEsencia($kingdom);
-            $tieneSellosAnillo1 = $hero->hasSeal($kingdom, 1);
-            $talisman->resetEsencia($kingdom, $tieneSellosAnillo1);
-        } else {
-            $esenciaGanada = $talisman->addEsencia(
-                $kingdom,
-                mt_rand(
-                    (int)(0.2 * $expedition->duration_seconds),
-                    (int)(0.5 * $expedition->duration_seconds)
-                )
-            );
-        }
-
-        $lootItem = null;
-        if (!$heroDied && mt_rand(1, 100) <= 40) {
-            $lootItem = $this->rollLoot($hero->id, $kingdom, $expedition->duration_seconds);
-        }
-
-        if ($heroDied) {
-            $hero->update(['hp_actual' => 0]);
-        } else {
-            $hero->update([
-                'hp_actual' => $result['hero_hp_left'],
-                'oro'       => $hero->oro + $oro,
-            ]);
-        }
-
+        $lootItem       = null;
+    
+        match($outcome) {
+    
+            'victory' => (function () use (
+                &$oro, &$esenciaGanada, &$lootItem,
+                $expedition, $hero, $talisman, $kingdom, $result
+            ) {
+                $oro = mt_rand(
+                    (int)(0.5 * $expedition->duration_seconds),
+                    (int)(3.0 * $expedition->duration_seconds)
+                );
+                $esenciaGanada = $talisman->addEsencia(
+                    $kingdom,
+                    mt_rand(
+                        (int)(0.2 * $expedition->duration_seconds),
+                        (int)(0.5 * $expedition->duration_seconds)
+                    )
+                );
+                if (mt_rand(1, 100) <= 40) {
+                    $lootItem = $this->rollLoot($hero->id, $kingdom, $expedition->duration_seconds);
+                }
+                $hero->update([
+                    'hp_actual' => $result['hero_hp_left'],
+                    'oro'       => $hero->oro + $oro,
+                ]);
+            })(),
+    
+            'defeat' => (function () use (
+                &$esenciaPerdida,
+                $hero, $talisman, $kingdom
+            ) {
+                $esenciaPerdida = $talisman->getEsencia($kingdom);
+                $talisman->resetEsencia($kingdom, $hero->hasSeal($kingdom, 1));
+                $hero->update(['hp_actual' => 0]);
+            })(),
+    
+            // Empate: héroe vuelve con el HP que le quedó, sin recompensas ni penalización
+            'draw' => (function () use ($hero, $result) {
+                $hero->update(['hp_actual' => max(1, $result['hero_hp_left'])]);
+            })(),
+        };
+    
         foreach ($result['logs'] as $log) {
             $expedition->combatLogs()->create($log);
         }
-
+    
         $expedition->update([
             'status'         => 'finished',
             'event_type'     => 'combat',
             'resultado'      => array_merge($result, [
                 'kingdom'            => $kingdom,
+                'outcome'            => $outcome,
                 'esencia_ganada'     => $esenciaGanada,
                 'esencia_perdida'    => $esenciaPerdida,
                 'oro_ganado'         => $oro,
@@ -206,10 +218,10 @@ class ExpeditionService
             ]),
             'carga_obtenida' => $esenciaGanada,
             'oro_obtenido'   => $oro,
-            'hero_died'      => $heroDied,
+            'hero_died'      => $outcome === 'defeat',
             'completed_at'   => now(),
         ]);
-
+    
         return $expedition->fresh();
     }
 
@@ -223,60 +235,77 @@ class ExpeditionService
     {
         $hero    = Hero::with(['equippedItems.equipment.element', 'talisman', 'seals'])->find($expedition->hero_id);
         $kingdom = $expedition->kingdom_slug;
-
+    
         $guardian = $this->combat->buildGuardian($kingdom);
         $result   = $this->combat->resolve($hero, $guardian);
-
-        $heroDied = !$result['hero_won'];
-        $oro      = $heroDied ? 0 : mt_rand(150, 300);
-
-        $talisman       = $hero->talisman;
-        $esenciaGanada  = 0;
+    
+        $outcome  = $result['outcome']; // guardianes no tienen draw (sin límite de rondas)
+        $talisman = $hero->talisman;
+    
+        $oro            = 0;
         $esenciaPerdida = 0;
         $selloObtenido  = false;
-
-        if ($heroDied) {
-            $esenciaPerdida = $talisman->getEsencia($kingdom);
-            // Al morir intentando el guardián, esencia a 0 (no tiene sello aún)
-            $talisman->resetEsencia($kingdom, false);
-            $hero->update(['hp_actual' => 0]);
-        } else {
-            // Victoria: crear sello, fijar esencia en 100 como piso permanente
-            Seal::firstOrCreate([
-                'hero_id'      => $hero->id,
-                'element_slug' => $kingdom,
-                'ring'         => 1,
-            ], [
-                'obtained_at' => now(),
-            ]);
-
-            // Asegurar que la esencia queda en exactamente MAX_ESENCIA
-            $talisman->update(["esencia_{$kingdom}" => \App\Models\Talisman::MAX_ESENCIA]);
-
-            // Recalcular HP por el nuevo sello (+15 HP)
-            $hero->load('seals');
-            $hero->recalcularHP();
-            $hero->load('equippedItems.equipment.element');
-            $hero->update([
-                'hp_actual' => min($hero->hp_actual, $hero->hp_maximo),
-                'oro'       => $hero->oro + $oro,
-            ]);
-
-            $selloObtenido = true;
-        }
-
+    
+        match($outcome) {
+    
+            'victory' => (function () use (
+                &$oro, &$selloObtenido,
+                $hero, $talisman, $kingdom
+            ) {
+                $oro = mt_rand(150, 300);
+    
+                Seal::firstOrCreate([
+                    'hero_id'      => $hero->id,
+                    'element_slug' => $kingdom,
+                    'ring'         => 1,
+                ], ['obtained_at' => now()]);
+    
+                // Esencia queda fijada en MAX como piso permanente
+                $talisman->update(["esencia_{$kingdom}" => \App\Models\Talisman::MAX_ESENCIA]);
+    
+                // Recalcular HP por el nuevo sello
+                $hero->load('seals');
+                $hero->recalcularHP();
+                $hero->load('equippedItems.equipment.element');
+                $hero->update([
+                    'hp_actual' => min($hero->hp_actual, $hero->hp_maximo),
+                    'oro'       => $hero->oro + $oro,
+                ]);
+    
+                $selloObtenido = true;
+            })(),
+    
+            'defeat' => (function () use (
+                &$esenciaPerdida,
+                $hero, $talisman, $kingdom
+            ) {
+                // Al morir intentando el guardián no tiene sello aún → esencia a 0
+                $esenciaPerdida = $talisman->getEsencia($kingdom);
+                $talisman->resetEsencia($kingdom, false);
+                $hero->update(['hp_actual' => 0]);
+            })(),
+    
+            // Guardianes no deberían dar draw (sin límite de rondas),
+            // pero si ocurriera por algún edge case se trata como derrota moral:
+            // el héroe sobrevive pero no obtiene el sello.
+            'draw' => (function () use ($hero, $result) {
+                $hero->update(['hp_actual' => max(1, $result['hero_hp_left'])]);
+            })(),
+        };
+    
         foreach ($result['logs'] as $log) {
             $expedition->combatLogs()->create($log);
         }
-
+    
         $expedition->update([
             'status'         => 'finished',
             'event_type'     => 'guardian',
             'resultado'      => array_merge($result, [
                 'kingdom'         => $kingdom,
                 'is_guardian'     => true,
+                'outcome'         => $outcome,
                 'sello_obtenido'  => $selloObtenido,
-                'esencia_ganada'  => $esenciaGanada,
+                'esencia_ganada'  => 0,
                 'esencia_perdida' => $esenciaPerdida,
                 'oro_ganado'      => $oro,
                 'loot_item_id'    => null,
@@ -285,10 +314,10 @@ class ExpeditionService
             ]),
             'carga_obtenida' => 0,
             'oro_obtenido'   => $oro,
-            'hero_died'      => $heroDied,
+            'hero_died'      => $outcome === 'defeat',
             'completed_at'   => now(),
         ]);
-
+    
         return $expedition->fresh();
     }
 
