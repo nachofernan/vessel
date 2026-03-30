@@ -26,7 +26,8 @@ class CombatService
             default => 100,
         };
  
-        $poder = (int)($poderBase * ($durationSeconds / 10));
+        $calculo = (int)($poderBase * ($durationSeconds / 10));
+        $poder = rand($calculo-50, $calculo+25);
  
         // Stats derivados del poder con distribución controlada.
         // El divisor central es fijo por stat; la varianza es ±10% por combate.
@@ -36,11 +37,11 @@ class CombatService
         // Referencia: héroe con todos stats en 5 y equipo nivel 1 carga media
         // tiene ataque ~12, defensa ~12, HP ~50 al inicio.
         // Enemigo de 10s anillo 1 (poder 100) debe ser comparable.
-        $fuerza      = $varianzaStat($poder / 10.0);
-        $resistencia = $varianzaStat($poder / 10.0);
-        $destreza    = $varianzaStat($poder / 20.0); // destreza más baja que el héroe en promedio
-        $suerte      = $varianzaStat($poder / 25.0);
-        $inteligencia = $varianzaStat($poder / 25.0);
+        $fuerza      = $varianzaStat($poder / 20.0);
+        $resistencia = $varianzaStat($poder / 20.0);
+        $destreza    = $varianzaStat($poder / 30.0); // destreza más baja que el héroe en promedio
+        $suerte      = $varianzaStat($poder / 35.0);
+        $inteligencia = $varianzaStat($poder / 35.0);
  
         // Ataque y defensa incluyen un "bonus de equipo" implícito proporcional al poder.
         // Equivale a que el enemigo tiene su propio equipo del elemento.
