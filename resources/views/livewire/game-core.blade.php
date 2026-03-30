@@ -90,6 +90,10 @@
         <div class="flex justify-between items-start mb-3">
             <h2 class="font-bold text-lg">— Refugio —</h2>
             <div class="flex gap-2">
+                <button wire:click="goToCheats"
+                        class="text-xs border border-red-300 text-red-400 px-2 py-1 hover:bg-red-50">
+                    Dev
+                </button>
                 <button wire:click="goToMarket"
                         class="text-xs border border-gray-400 px-2 py-1 hover:bg-gray-100">
                     Mercado
@@ -921,5 +925,204 @@
                 @endforeach
             </div>
         @endif
+    {{-- ═══════════════════════════════════════════════════════════ CHEATS ══ --}}
+    @elseif($phase === 'cheats')
+    @php
+        $colores = \App\Models\Talisman::COLORES;
+        $nombres = \App\Models\Talisman::NOMBRES;
+        $slots   = ['casco','pecho','brazos','piernas','escudo','arma','amuleto'];
+        $equipped = $hero->equippedItems->keyBy('piece_type');
+    @endphp
+
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="font-bold text-lg text-red-500">⚙ Panel de Desarrollo</h2>
+        <button wire:click="backToHub"
+                class="text-xs border border-gray-400 px-2 py-1 hover:bg-gray-100">
+            ← Refugio
+        </button>
+    </div>
+
+    @if($cheatMessage)
+        <div class="mb-4 px-3 py-2 text-xs border
+            {{ str_starts_with($cheatMessage, '✗')
+                ? 'border-red-300 bg-red-50 text-red-600'
+                : 'border-green-300 bg-green-50 text-green-700' }}">
+            {{ $cheatMessage }}
+        </div>
+    @endif
+
+    {{-- ── Stats ───────────────────────────────────────────────────────────────── --}}
+    <div class="mb-5 p-3 border border-gray-200">
+        <p class="text-xs text-gray-400 uppercase tracking-wide mb-3">Stats del héroe</p>
+        <div class="grid grid-cols-5 gap-2 mb-3">
+            @foreach(['fuerza'=>'FUE','resistencia'=>'RES','destreza'=>'DES','inteligencia'=>'INT','suerte'=>'SUE'] as $stat => $lbl)
+                <div>
+                    <label class="text-xs text-gray-400 block mb-1">{{ $lbl }}</label>
+                    <input type="number" wire:model="cheatStats.{{ $stat }}"
+                        min="1" max="99"
+                        class="w-full border border-gray-300 px-2 py-1 text-sm text-center" />
+                </div>
+            @endforeach
+        </div>
+        <div class="flex items-center gap-3">
+            <button wire:click="cheatSaveStats"
+                    class="text-xs bg-gray-800 text-white px-3 py-1 hover:bg-black">
+                Guardar stats
+            </button>
+            <button wire:click="cheatRestoreHP"
+                    class="text-xs border border-gray-400 px-3 py-1 hover:bg-gray-100">
+                Restaurar HP
+            </button>
+            <span class="text-xs text-gray-400">
+                HP actual: {{ $hero->hp_actual }}/{{ $hero->hp_maximo }}
+            </span>
+        </div>
+    </div>
+
+    {{-- ── Oro ─────────────────────────────────────────────────────────────────── --}}
+    <div class="mb-5 p-3 border border-gray-200">
+        <p class="text-xs text-gray-400 uppercase tracking-wide mb-3">Oro</p>
+        <div class="flex items-center gap-3">
+            <input type="number" wire:model="cheatOro"
+                min="0"
+                class="border border-gray-300 px-2 py-1 text-sm w-32 text-center" />
+            <button wire:click="cheatSaveOro"
+                    class="text-xs bg-gray-800 text-white px-3 py-1 hover:bg-black">
+                Guardar oro
+            </button>
+            <span class="text-xs text-gray-400">Actual: {{ $hero->oro }}</span>
+        </div>
+    </div>
+
+    {{-- ── Esencias ────────────────────────────────────────────────────────────── --}}
+    <div class="mb-5 p-3 border border-gray-200">
+        <p class="text-xs text-gray-400 uppercase tracking-wide mb-3">Esencias del Talismán</p>
+        <div class="grid grid-cols-7 gap-2 mb-3">
+            @foreach(\App\Models\Talisman::ELEMENTOS as $slug)
+                <div>
+                    <label class="text-xs block mb-1" style="color:{{ $colores[$slug] }}">
+                        {{ $nombres[$slug] }}
+                    </label>
+                    <input type="number" wire:model="cheatEsencias.{{ $slug }}"
+                        min="0" max="9999"
+                        class="w-full border border-gray-300 px-1 py-1 text-sm text-center" />
+                </div>
+            @endforeach
+        </div>
+        <button wire:click="cheatSaveEsencias"
+                class="text-xs bg-gray-800 text-white px-3 py-1 hover:bg-black">
+            Guardar esencias
+        </button>
+    </div>
+
+    {{-- ── Sellos ──────────────────────────────────────────────────────────────── --}}
+    <div class="mb-5 p-3 border border-gray-200">
+        <p class="text-xs text-gray-400 uppercase tracking-wide mb-3">
+            Sellos (anillo 1) — click para toggle
+        </p>
+        <div class="flex gap-2 flex-wrap">
+            @foreach(\App\Models\Talisman::ELEMENTOS as $slug)
+                @php $tieneSello = $hero->hasSeal($slug, 1); @endphp
+                <button wire:click="cheatToggleSeal('{{ $slug }}')"
+                        class="text-xs px-3 py-1 border rounded transition-all"
+                        style="
+                            border-color: {{ $colores[$slug] }};
+                            background: {{ $tieneSello ? $colores[$slug] : 'transparent' }};
+                            color: {{ $tieneSello ? '#fff' : $colores[$slug] }};
+                        ">
+                    {{ $tieneSello ? '✦' : '○' }} {{ $nombres[$slug] }}
+                </button>
+            @endforeach
+        </div>
+        <p class="text-xs text-gray-300 mt-2">
+            Sellos totales: {{ $hero->totalSeals() }} · HP máximo: {{ $hero->hp_maximo }}
+        </p>
+    </div>
+
+    {{-- ── Equipo equipado ────────────────────────────────────────────────────── --}}
+    <div class="mb-5 p-3 border border-gray-200">
+        <p class="text-xs text-gray-400 uppercase tracking-wide mb-3">Equipo equipado</p>
+        <div class="space-y-1">
+            @foreach($slots as $slot)
+                @php $slotData = $equipped[$slot] ?? null; @endphp
+                <div class="flex items-center gap-2 text-xs">
+                    <span class="w-14 text-gray-400 uppercase">{{ $slot }}</span>
+                    @if($slotData)
+                        @php $c = $colores[$slotData->equipment->element->slug] ?? '#9ca3af'; @endphp
+                        <span style="color:{{ $c }}">
+                            {{ $slotData->equipment->name }}
+                        </span>
+                        <span class="text-gray-400">
+                            carga {{ $slotData->carga }}/{{ $slotData->equipment->carga_maxima }}
+                        </span>
+                        <button wire:click="cheatUnequipSlot('{{ $slot }}')"
+                                class="text-red-400 hover:text-red-600 ml-auto">
+                            × quitar
+                        </button>
+                    @else
+                        <span class="text-gray-200 italic">— vacío —</span>
+                    @endif
+                </div>
+            @endforeach
+        </div>
+    </div>
+
+    {{-- ── Agregar equipo al inventario ───────────────────────────────────────── --}}
+    <div class="mb-5 p-3 border border-gray-200">
+        <p class="text-xs text-gray-400 uppercase tracking-wide mb-3">Agregar pieza al inventario</p>
+        <div class="flex gap-2 items-end flex-wrap">
+            <div>
+                <label class="text-xs text-gray-400 block mb-1">Elemento</label>
+                <select wire:model="cheatEquipElement"
+                        class="border border-gray-300 px-2 py-1 text-sm">
+                    @foreach(\App\Models\Talisman::ELEMENTOS as $slug)
+                        <option value="{{ $slug }}">{{ \App\Models\Talisman::NOMBRES[$slug] }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="text-xs text-gray-400 block mb-1">Slot</label>
+                <select wire:model="cheatEquipSlot"
+                        class="border border-gray-300 px-2 py-1 text-sm">
+                    @foreach(['casco','pecho','brazos','piernas','escudo','arma','amuleto'] as $s)
+                        <option value="{{ $s }}">{{ ucfirst($s) }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="text-xs text-gray-400 block mb-1">Carga</label>
+                <input type="number" wire:model="cheatEquipCarga"
+                    min="1" max="100"
+                    class="border border-gray-300 px-2 py-1 text-sm w-20 text-center" />
+            </div>
+            <button wire:click="cheatAddEquip"
+                    class="text-xs bg-gray-800 text-white px-3 py-2 hover:bg-black">
+                Agregar
+            </button>
+        </div>
+    </div>
+
+    {{-- ── Inventario actual ───────────────────────────────────────────────────── --}}
+    @if($hero->inventory->isNotEmpty())
+        <div class="mb-5 p-3 border border-gray-200">
+            <p class="text-xs text-gray-400 uppercase tracking-wide mb-3">Inventario actual</p>
+            <div class="space-y-1">
+                @foreach($hero->inventory as $invRow)
+                    @php $c = $colores[$invRow->equipment->element->slug] ?? '#9ca3af'; @endphp
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="w-14 text-gray-400">{{ $invRow->equipment->piece_type }}</span>
+                        <span style="color:{{ $c }}">{{ $invRow->equipment->name }}</span>
+                        <span class="text-gray-400">
+                            carga {{ $invRow->carga }}/{{ $invRow->equipment->carga_maxima }}
+                        </span>
+                        <button wire:click="cheatRemoveEquip({{ $invRow->id }})"
+                                class="text-red-400 hover:text-red-600 ml-auto">
+                            × eliminar
+                        </button>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
     @endif
 </div>

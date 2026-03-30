@@ -55,6 +55,14 @@ class GameCore extends Component
         50 => 80,
     ];
 
+    public string  $cheatMessage      = '';
+    public array   $cheatStats        = [];
+    public array   $cheatEsencias     = [];
+    public int     $cheatOro          = 0;
+    public string  $cheatEquipElement = 'fire';
+    public string  $cheatEquipSlot    = 'arma';
+    public int     $cheatEquipCarga   = 50;
+
     // ─── Mount ───────────────────────────────────────────────────────────────
 
     public function mount(): void
@@ -443,6 +451,174 @@ class GameCore extends Component
             $this->resultado = $resolved->resultado;
             $this->phase     = 'result';
         }
+    }
+
+    // ─── Cheats ──────────────────────────────────────────────────────────────────
+ 
+    public function goToCheats(): void
+    {
+        $this->hero = $this->loadHero($this->heroId);
+    
+        // Inicializar formularios con valores actuales
+        $this->cheatStats = [
+            'fuerza'       => $this->hero->fuerza,
+            'resistencia'  => $this->hero->resistencia,
+            'destreza'     => $this->hero->destreza,
+            'inteligencia' => $this->hero->inteligencia,
+            'suerte'       => $this->hero->suerte,
+        ];
+    
+        $this->cheatEsencias = $this->hero->talisman->todasLasEsencias();
+        $this->cheatOro      = $this->hero->oro;
+        $this->cheatMessage  = '';
+        $this->phase         = 'cheats';
+    }
+    
+    public function cheatSaveStats(): void
+    {
+        $this->hero = $this->loadHero($this->heroId);
+    
+        $allowed = ['fuerza', 'resistencia', 'destreza', 'inteligencia', 'suerte'];
+        $update  = [];
+    
+        foreach ($allowed as $stat) {
+            $val = (int)($this->cheatStats[$stat] ?? 1);
+            $update[$stat] = max(1, min(99, $val));
+        }
+    
+        $this->hero->update($update);
+        $this->hero = $this->loadHero($this->heroId);
+        $this->hero->recalcularHP();
+        $this->hero = $this->loadHero($this->heroId);
+    
+        $this->cheatMessage = '✓ Stats actualizados.';
+    }
+    
+    public function cheatSaveEsencias(): void
+    {
+        $this->hero = $this->loadHero($this->heroId);
+        $talisman   = $this->hero->talisman;
+    
+        $update = [];
+        foreach (Talisman::ELEMENTOS as $slug) {
+            $val = (int)($this->cheatEsencias[$slug] ?? 0);
+            $update["esencia_{$slug}"] = max(0, min(9999, $val));
+        }
+    
+        $talisman->update($update);
+        $this->hero        = $this->loadHero($this->heroId);
+        $this->cheatMessage = '✓ Esencias actualizadas.';
+    }
+    
+    public function cheatSaveOro(): void
+    {
+        $this->hero = $this->loadHero($this->heroId);
+        $this->hero->update(['oro' => max(0, (int)$this->cheatOro)]);
+        $this->hero        = $this->loadHero($this->heroId);
+        $this->cheatMessage = '✓ Oro actualizado.';
+    }
+    
+    public function cheatToggleSeal(string $elementSlug): void
+    {
+        $this->hero = $this->loadHero($this->heroId);
+    
+        $existing = \App\Models\Seal::where('hero_id', $this->heroId)
+            ->where('element_slug', $elementSlug)
+            ->where('ring', 1)
+            ->first();
+    
+        if ($existing) {
+            $existing->delete();
+            $this->cheatMessage = "✓ Sello {$elementSlug} eliminado.";
+        } else {
+            \App\Models\Seal::create([
+                'hero_id'      => $this->heroId,
+                'element_slug' => $elementSlug,
+                'ring'         => 1,
+                'obtained_at'  => now(),
+            ]);
+            $this->cheatMessage = "✓ Sello {$elementSlug} otorgado.";
+        }
+    
+        $this->hero = $this->loadHero($this->heroId);
+        $this->hero->recalcularHP();
+        $this->hero = $this->loadHero($this->heroId);
+    }
+    
+    public function cheatAddEquip(): void
+    {
+        $this->hero = $this->loadHero($this->heroId);
+    
+        $element = \App\Models\Element::where('slug', $this->cheatEquipElement)->first();
+        if (!$element) {
+            $this->cheatMessage = '✗ Elemento no encontrado.';
+            return;
+        }
+    
+        $piece = Equipment::where('piece_type', $this->cheatEquipSlot)
+            ->where('element_id', $element->id)
+            ->where('level', 1)
+            ->first();
+    
+        if (!$piece) {
+            $this->cheatMessage = '✗ Pieza no encontrada en el catálogo.';
+            return;
+        }
+    
+        $carga = max(1, min((int)$this->cheatEquipCarga, $piece->carga_maxima));
+    
+        // Fusión si ya está en inventario
+        $existing = Inventory::where('hero_id', $this->heroId)
+            ->where('equipment_id', $piece->id)
+            ->first();
+    
+        if ($existing) {
+            $nueva = min($piece->carga_maxima, $existing->carga + $carga);
+            $existing->update(['carga' => $nueva]);
+            $this->cheatMessage = "✓ Fusión en inventario. Carga: {$nueva}/{$piece->carga_maxima}.";
+        } else {
+            Inventory::create([
+                'hero_id'      => $this->heroId,
+                'equipment_id' => $piece->id,
+                'carga'        => $carga,
+            ]);
+            $this->cheatMessage = "✓ {$piece->name} agregado al inventario (carga {$carga}).";
+        }
+    
+        $this->hero = $this->loadHero($this->heroId);
+    }
+    
+    public function cheatRemoveEquip(int $inventoryId): void
+    {
+        Inventory::where('id', $inventoryId)
+            ->where('hero_id', $this->heroId)
+            ->delete();
+    
+        $this->hero        = $this->loadHero($this->heroId);
+        $this->cheatMessage = '✓ Item eliminado del inventario.';
+    }
+    
+    public function cheatUnequipSlot(string $slot): void
+    {
+        $slotRow = HeroEquipment::where('hero_id', $this->heroId)
+            ->where('piece_type', $slot)
+            ->first();
+    
+        if ($slotRow) {
+            $slotRow->delete();
+            $this->hero = $this->loadHero($this->heroId);
+            $this->hero->recalcularHP();
+            $this->hero        = $this->loadHero($this->heroId);
+            $this->cheatMessage = "✓ Slot {$slot} vaciado.";
+        }
+    }
+    
+    public function cheatRestoreHP(): void
+    {
+        $this->hero = $this->loadHero($this->heroId);
+        $this->hero->update(['hp_actual' => $this->hero->hp_maximo]);
+        $this->hero        = $this->loadHero($this->heroId);
+        $this->cheatMessage = '✓ HP restaurado al máximo.';
     }
 
     // ─── Helpers de acceso por esencia ───────────────────────────────────────
