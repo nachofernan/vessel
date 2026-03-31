@@ -37,6 +37,12 @@ class GameCore extends Component
     public array  $marketStock    = [];
     public ?string $marketMessage = null;
 
+    public string $simKingdom    = 'fire';
+    public int    $simDuration   = 50;
+    public int    $simCount      = 20;
+    public array  $simResults    = [];
+    public bool   $simRunning    = false;
+
     public const KINGDOMS = [
         'fire'   => ['name' => 'Fuego',  'color' => '#ef4444'],
         'water'  => ['name' => 'Agua',   'color' => '#3b82f6'],
@@ -619,6 +625,38 @@ class GameCore extends Component
         $this->hero->update(['hp_actual' => $this->hero->hp_maximo]);
         $this->hero        = $this->loadHero($this->heroId);
         $this->cheatMessage = '✓ HP restaurado al máximo.';
+    }
+
+    public function runSimulation(): void
+    {
+        $this->hero = $this->loadHero($this->heroId);
+    
+        $combat  = app(\App\Services\CombatService::class);
+        $count   = max(1, min(200, (int)$this->simCount));
+        $results = [];
+    
+        for ($i = 0; $i < $count; $i++) {
+            $enemy  = $combat->buildEnemy($this->simKingdom, 1, $this->simDuration);
+            $result = $combat->resolve($this->hero, $enemy);
+    
+            $results[] = [
+                'n'              => $i + 1,
+                'outcome'        => $result['outcome'],
+                'rounds'         => $result['rounds'],
+                'hero_hp_left'   => $result['hero_hp_left'],
+                'enemy_hp_ini'   => $enemy['hp'],
+                'enemy_poder'    => $enemy['poder'],
+                'enemy_ataque'   => $enemy['ataque'],
+                'enemy_defensa'  => $enemy['defensa'],
+                'chance_h'       => $result['chance_heroe_golpea'],
+                'chance_e'       => $result['chance_enemigo_golpea'],
+            ];
+        }
+    
+        $this->simResults  = $results;
+        $this->simRunning  = false;
+        $this->cheatMessage = "✓ Simulación completada: {$count} batallas vs " .
+            \App\Models\Talisman::NOMBRES[$this->simKingdom] . " {$this->simDuration}s.";
     }
 
     // ─── Helpers de acceso por esencia ───────────────────────────────────────
